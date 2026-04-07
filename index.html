@@ -198,25 +198,6 @@
 <!-- SECTION 2 -->
 <section class="grid2">
   <div class="panel" style="margin-bottom:0;">
-    <h2>Pool State  ·  L · S = K</h2>
-    <svg id="pool-svg" viewBox="0 0 420 320"></svg>
-    <div id="pool-readouts" style="margin-top:12px;"></div>
-    <div class="narration">
-      <p class="lead">The pool state is the distribution of all committed policies, summarized in two numbers.</p>
-      <p><b>L</b> and <b>S</b> are the <i>wing weights</i> — cumulative commitment mass on each side of consensus φ*,
-        in sinh-angle coordinates. L counts policies committed above φ*; S counts policies committed below.
-        They're not reserves of tokens; they're bookkeeping for how the committed population is distributed around the mean.</p>
-      <p>The curve <code>L·S = K</code> is the set of all states with the same <b>depth</b>. A trade
-        (the pink preview) slides you along this hyperbola — shifting the balance between L and S, which
-        tilts consensus toward whichever side absorbed the commitment. A liquidity event (not shown) would jump
-        the entire curve inward or outward to a different K.</p>
-      <p>So the full state manifold is 2-dimensional: <code>(K, tilt)</code>, or equivalently <code>(L, S)</code>.
-        Trades exercise the tilt axis; liquidity exercises the depth axis.
-        Liquidity "stays centered around consensus" <span data-tip="Consensus is defined as the midpoint of L and S in angle-space, so moving L or S mechanically moves consensus. The exponential depth shape around consensus falls out of the sinh invariant — it's not imposed, it's a consequence.">by construction</span>:
-        consensus is the midpoint of the distribution, not a fixed price.</p>
-    </div>
-  </div>
-  <div class="panel" style="margin-bottom:0;">
     <h2>Trade  ·  Commit a Policy</h2>
     <div class="small" style="margin-bottom:12px;">
       A policy is a committed rule, not a directional bet. <span class="text-accent">φ</span> is your expected drift;
@@ -242,6 +223,25 @@
           <tbody id="log-body"><tr><td colspan="7" class="empty">no trades yet</td></tr></tbody>
         </table>
       </div>
+    </div>
+  </div>
+  <div class="panel" style="margin-bottom:0;">
+    <h2>Pool State  ·  L · S = K</h2>
+    <svg id="pool-svg" viewBox="0 0 420 320"></svg>
+    <div id="pool-readouts" style="margin-top:12px;"></div>
+    <div class="narration">
+      <p class="lead">The pool state is the distribution of all committed policies, summarized in two numbers.</p>
+      <p><b>L</b> and <b>S</b> are the <i>wing weights</i> — cumulative commitment mass on each side of consensus φ*,
+        in sinh-angle coordinates. L counts policies committed above φ*; S counts policies committed below.
+        They're not reserves of tokens; they're bookkeeping for how the committed population is distributed around the mean.</p>
+      <p>The curve <code>L·S = K</code> is the set of all states with the same <b>depth</b>. A trade
+        (the pink preview) slides you along this hyperbola — shifting the balance between L and S, which
+        tilts consensus toward whichever side absorbed the commitment. A liquidity event (not shown) would jump
+        the entire curve inward or outward to a different K.</p>
+      <p>So the full state manifold is 2-dimensional: <code>(K, tilt)</code>, or equivalently <code>(L, S)</code>.
+        Trades exercise the tilt axis; liquidity exercises the depth axis.
+        Liquidity "stays centered around consensus" <span data-tip="Consensus is defined as the midpoint of L and S in angle-space, so moving L or S mechanically moves consensus. The exponential depth shape around consensus falls out of the sinh invariant — it's not imposed, it's a consequence.">by construction</span>:
+        consensus is the midpoint of the distribution, not a fixed price.</p>
     </div>
   </div>
 </section>
