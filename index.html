@@ -88,6 +88,13 @@
     padding-top:12px; border-top:1px dashed var(--border); }
   .narration p { margin:6px 0; }
   .narration .lead { color:var(--bright); }
+  details.workings { margin-top:8px; }
+  details.workings > summary { cursor:pointer; list-style:none; color:var(--dim);
+    font-size:11px; text-transform:uppercase; letter-spacing:1px; padding:6px 0; }
+  details.workings > summary::-webkit-details-marker { display:none; }
+  details.workings > summary::before { content:'▸ '; }
+  details.workings[open] > summary::before { content:'▾ '; }
+  details.workings .body { padding-top:4px; }
 </style>
 </head>
 <body>
@@ -531,16 +538,20 @@ function renderTrade(preview) {
   const tilt = preview.delta === 0 ? '— neutral —'
              : preview.tiltL ? 'pushes into L' : 'pushes into S';
   const tiltColor = preview.delta === 0 ? '#555770' : '#818cf8';
+  const depositTip = preview.tiltL
+    ? 'deposit = S · |δ| / (L + |δ|). BTC numeraire extracted from the opposite reserve when the pool absorbs your commitment. Scales with |δ| and pool imbalance.'
+    : 'deposit = L · |δ| / (S + |δ|). BTC numeraire extracted from the opposite reserve when the pool absorbs your commitment. Scales with |δ| and pool imbalance.';
   document.getElementById('trade-readouts').innerHTML =
-    rowHTML('φ  expected drift', fmt(preview.dphi), null, 'Your expected drift angle. Not a bet on direction — the anchor around which your rebalancing rule fires.') +
-    rowHTML('pool tilt', tilt, tiltColor, 'Which reserve your commitment pushes into. Determined by sign(δ) = sign(log w)·sign(φ−φ*).') +
-    rowHTML('δ  effective size', fmt(preview.delta), '#f472b6', 'δ = q · log(w) · sinh(φ − φ*). Signed effective commitment size. Zero at w=1.') +
-    rowHTML('ρ  sensitivity ratio', fmt(preview.rho), '#fbbf24', 'Value-preservation efficiency in (0,1]. ρ = (value received) / (value at the clearing quote). ρ=1 is no impact; ρ→0 means the pool was thin and most notional got eaten by price impact. Permanent quality locked into every future rebalance.') +
-    rowHTML('w_out  received', fmt(preview.wOut), null, 'Counter-policy you receive: w_out = w_in^ρ. In log-space, ρ fraction of your sensitivity is preserved.') +
-    rowHTML('w_net  net exposure', fmt(preview.wNet), null, 'w_in^(1−ρ). The residual "distance from neutral" after the AMM absorbs some.') +
-    rowHTML('cost (BTC)', fmt(preview.cost), '#22d3ee', 'BTC paid to execute. Scales with |δ| and pool imbalance.') +
     rowHTML('slippage  (1−ρ)', (preview.slippage * 100).toFixed(2) + '%', null, 'Fraction of committed notional value lost to price impact. Identically equal to 1 − ρ — there is no other notion of slippage here.') +
-    rowHTML('price after', fmt(preview.priceAfter), '#fbbf24', 'The new marginal clearing price after the commitment is absorbed.');
+    rowHTML('deposit / margin (BTC)', fmt(preview.cost), '#22d3ee', depositTip) +
+    `<details class="workings"><summary>workings</summary><div class="body">` +
+      rowHTML('pool tilt', tilt, tiltColor, 'Which reserve your commitment pushes into. Determined by sign(δ) = sign(log w)·sign(φ−φ*).') +
+      rowHTML('δ  effective size', fmt(preview.delta), '#f472b6', 'δ = q · log(w) · sinh(φ − φ*). Signed effective commitment size. Zero at w=1.') +
+      rowHTML('ρ  sensitivity ratio', fmt(preview.rho), '#fbbf24', 'Value-preservation efficiency in (0,1]. ρ = (value received) / (value at the clearing quote). ρ=1 is no impact; ρ→0 means the pool was thin and most notional got eaten by price impact. Permanent quality locked into every future rebalance.') +
+      rowHTML('w_out  received', fmt(preview.wOut), null, 'Counter-policy you receive: w_out = w_in^ρ. In log-space, ρ fraction of your sensitivity is preserved.') +
+      rowHTML('w_net  net exposure', fmt(preview.wNet), null, 'w_in^(1−ρ). The residual "distance from neutral" after the AMM absorbs some.') +
+      rowHTML('price after', fmt(preview.priceAfter), '#fbbf24', 'The new marginal clearing price P = S/L after the commitment is absorbed.') +
+    `</div></details>`;
 }
 
 function renderLog() {
