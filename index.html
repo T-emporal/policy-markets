@@ -118,9 +118,9 @@
   </div>
   <div class="panel" style="margin-bottom:0;">
     <h2>Trade  ·  Commit a Policy</h2>
-    <div class="toggle">
-      <button id="side-long" class="on long" data-side="long">Long</button>
-      <button id="side-short" data-side="short">Short</button>
+    <div class="small" style="margin-bottom:12px;">
+      Sign of <span class="text-accent">φ</span> sets the side: <span class="text-short">φ &gt; 0</span> sells rallies (short-like),
+      <span class="text-long">φ &lt; 0</span> buys dips (long-like). Magnitude = conviction.
     </div>
     <div class="slider"><div class="top"><span class="lab">φ  drift angle</span><span class="val text-accent" id="t-phi-v">0.60</span></div>
       <input type="range" id="t-phi" min="-2" max="2" step="0.01" value="0.6"></div>
@@ -130,7 +130,7 @@
       <input type="range" id="t-q" min="0.1" max="5" step="0.01" value="1"></div>
     <div id="trade-readouts" style="margin:14px 0;"></div>
     <div class="actions">
-      <button id="exec-btn" class="btn-exec long">Execute</button>
+      <button id="exec-btn" class="btn-exec long">Commit Policy</button>
       <button id="reset-btn" class="btn-reset">Reset</button>
     </div>
     <div style="margin-top:16px;">
@@ -165,7 +165,7 @@
     <span class="pill" style="border:1px solid rgba(129,140,248,.4); background:rgba(129,140,248,.08); color:var(--accent);">sinh(Φ_L) · sinh(Φ_S) = K</span>
     <span class="pill" style="border:1px solid rgba(251,191,36,.4); background:rgba(251,191,36,.08); color:var(--gold);">ρ = S / (L + δ)</span>
     <span class="pill" style="border:1px solid rgba(34,211,238,.4); background:rgba(34,211,238,.08); color:var(--cyan);">BTC ≡ (φ*, 1, 1)</span>
-    <span class="pill" style="border:1px solid rgba(244,114,182,.4); background:rgba(244,114,182,.08); color:var(--pink);">δ = w · sinh(Δφ)</span>
+    <span class="pill" style="border:1px solid rgba(244,114,182,.4); background:rgba(244,114,182,.08); color:var(--pink);">δ = w · sinh(φ − φ*)</span>
   </div>
   Policy Markets — Working Paper 2026
 </footer>
@@ -179,24 +179,29 @@ function poolFromAngles(phiL, phiS) {
   return { phiL, phiS, L, S, K: L * S };
 }
 function poolFromLS(L, S) { return { phiL: asinh(L), phiS: asinh(S), L, S, K: L * S }; }
-function previewTrade(pool, phiTrader, wIn, side) {
-  const dphi = Math.abs(phiTrader);
-  const delta = wIn * sinh(dphi);
-  const isLong = side === 'long';
+// Signed δ. φ > 0 ⇒ trader expects upward drift relative to consensus,
+// so they synthetically sell rallies → δ pushed into S (short-like).
+// φ < 0 ⇒ they buy dips → δ pushed into L (long-like).
+function previewTrade(pool, phiTrader, wIn) {
+  const dphi = phiTrader;                  // signed
+  const delta = wIn * sinh(dphi);          // signed effective size
+  const mag = Math.abs(delta);
+  const side = dphi >= 0 ? 'short' : 'long';
   let L1, S1, rho, cost;
-  if (isLong) {
-    L1 = pool.L + delta; S1 = pool.K / L1;
-    rho = pool.S / L1; cost = (pool.S * delta) / L1;
+  if (side === 'long') {
+    L1 = pool.L + mag; S1 = pool.K / L1;
+    rho = pool.S / L1; cost = (pool.S * mag) / L1;
   } else {
-    S1 = pool.S + delta; L1 = pool.K / S1;
-    rho = pool.L / S1; cost = (pool.L * delta) / S1;
+    S1 = pool.S + mag; L1 = pool.K / S1;
+    rho = pool.L / S1; cost = (pool.L * mag) / S1;
   }
   const newPool = poolFromLS(L1, S1);
   const priceBefore = pool.S / pool.L, priceAfter = newPool.S / newPool.L;
   return {
-    dphi, delta, rho, wOut: wIn * rho, wNet: wIn * (1 - rho),
+    dphi, delta, mag, side,
+    rho, wOut: wIn * rho, wNet: wIn * (1 - rho),
     cost, newPool, priceBefore, priceAfter,
-    slippage: Math.abs(priceAfter - priceBefore) / priceBefore,
+    slippage: priceBefore > 0 ? Math.abs(priceAfter - priceBefore) / priceBefore : 0,
   };
 }
 
@@ -204,7 +209,6 @@ function previewTrade(pool, phiTrader, wIn, side) {
 const INITIAL = () => poolFromAngles(1.5, 1.5);
 const state = {
   pool: INITIAL(),
-  side: 'long',
   phi: 0.6, wIn: 1.0, q: 1.0,
   log: [],
   ex: { phi: 0.3, w: 1.5, q: 2.0 },
@@ -259,7 +263,7 @@ function rowHTML(k, v, color) {
 
 function renderPool() {
   const pool = state.pool;
-  const preview = previewTrade(pool, state.phi, state.wIn, state.side);
+  const preview = previewTrade(pool, state.phi, state.wIn);
   const svg = document.getElementById('pool-svg');
   clear(svg);
   const W = 420, H = 320, pad = 36;
@@ -315,8 +319,10 @@ function renderTrade(preview) {
   document.getElementById('t-w-v').textContent = state.wIn.toFixed(2);
   document.getElementById('t-q-v').textContent = state.q.toFixed(2);
 
+  const sideColor = preview.side === 'long' ? '#22c55e' : '#ef4444';
   document.getElementById('trade-readouts').innerHTML =
-    rowHTML('Δφ  drift gap', fmt(preview.dphi)) +
+    rowHTML('Δφ  signed drift', fmt(preview.dphi)) +
+    rowHTML('side  (sign of φ)', preview.side.toUpperCase(), sideColor) +
     rowHTML('δ  effective size', fmt(preview.delta), '#f472b6') +
     rowHTML('ρ  sensitivity ratio', fmt(preview.rho), '#fbbf24') +
     rowHTML('w_out  received', fmt(preview.wOut)) +
@@ -327,10 +333,7 @@ function renderTrade(preview) {
 
   const execBtn = document.getElementById('exec-btn');
   execBtn.classList.remove('long', 'short');
-  execBtn.classList.add(state.side);
-
-  document.getElementById('side-long').classList.toggle('on', state.side === 'long');
-  document.getElementById('side-short').classList.toggle('on', state.side === 'short');
+  execBtn.classList.add(preview.side);
 }
 
 function renderLog() {
@@ -379,7 +382,7 @@ function renderDepth(preview) {
   svg.appendChild(el('path', { d:'M' + impactPts.map(p => `${p[0]},${p[1]}`).join(' L'),
     fill:'none', stroke:'#fbbf24', 'stroke-width':1.5, 'stroke-dasharray':'3 2' }));
 
-  const cd = (state.side === 'long' ? 1 : -1) * preview.delta;
+  const cd = preview.delta;
   const cdC = Math.max(dMin, Math.min(dMax, cd));
   svg.appendChild(el('line', { x1:sx(cdC), y1:4, x2:sx(cdC), y2:cy, stroke:'#f472b6', 'stroke-width':1.5 }));
   svg.appendChild(el('text', { x:sx(cdC)+4, y:cy-6, fill:'#f472b6', 'font-size':10 }, `δ = ${cd.toFixed(2)}`));
@@ -431,10 +434,11 @@ function renderRho(preview) {
       `K = ${k.K.toFixed(2)}${k.label ? '  ' + k.label : ''}`));
   });
 
-  if (preview.dphi >= 0 && preview.dphi <= xMax) {
-    svg.appendChild(el('circle', { cx:sx(preview.dphi), cy:sy(preview.rho), r:6, fill:'#f472b6' }));
-    svg.appendChild(el('text', { x:sx(preview.dphi)+10, y:sy(preview.rho)-6, fill:'#f472b6', 'font-size':10 },
-      `Δφ = ${preview.dphi.toFixed(2)}, ρ = ${preview.rho.toFixed(4)}`));
+  const adphi = Math.abs(preview.dphi);
+  if (adphi <= xMax) {
+    svg.appendChild(el('circle', { cx:sx(adphi), cy:sy(preview.rho), r:6, fill:'#f472b6' }));
+    svg.appendChild(el('text', { x:sx(adphi)+10, y:sy(preview.rho)-6, fill:'#f472b6', 'font-size':10 },
+      `|Δφ| = ${adphi.toFixed(2)}, ρ = ${preview.rho.toFixed(4)}`));
   }
 }
 
@@ -460,13 +464,10 @@ document.getElementById('t-phi').addEventListener('input', e => { state.phi = pa
 document.getElementById('t-w').addEventListener('input', e => { state.wIn = parseFloat(e.target.value); render(); });
 document.getElementById('t-q').addEventListener('input', e => { state.q = parseFloat(e.target.value); render(); });
 
-document.getElementById('side-long').addEventListener('click', () => { state.side = 'long'; render(); });
-document.getElementById('side-short').addEventListener('click', () => { state.side = 'short'; render(); });
-
 document.getElementById('exec-btn').addEventListener('click', () => {
-  const p = previewTrade(state.pool, state.phi, state.wIn, state.side);
+  const p = previewTrade(state.pool, state.phi, state.wIn);
   state.pool = p.newPool;
-  state.log.push({ side: state.side, phi: state.phi, wIn: state.wIn, q: state.q,
+  state.log.push({ side: p.side, phi: state.phi, wIn: state.wIn, q: state.q,
     delta: p.delta, rho: p.rho, cost: p.cost });
   render();
 });
