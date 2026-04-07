@@ -183,15 +183,9 @@
     <h2>Pool State  ·  L · S = K</h2>
     <svg id="pool-svg" viewBox="0 0 480 260" style="height:260px;"></svg>
     <div class="small" style="margin-top:10px; line-height:1.55;">
-      <b>Fig 2.</b> The pool's state is a single point <span style="color:#fbbf24">(L, S)</span> on the
-      hyperbola <code>L·S = K</code>. <b>L</b> and <b>S</b> are the <i>wing weights</i> — cumulative commitment
-      mass above and below consensus φ*, in sinh-angle coordinates. Not reserves of tokens; bookkeeping for how
-      the committed population is distributed around the mean. The curve <code>L·S = K</code> is the set of all
-      states at the same <b>depth</b>: your pending trade (pink) slides the point along it; a liquidity event
-      (not shown) would jump you to a different K. So the state manifold is 2-dimensional — <code>(K, tilt)</code>,
-      or equivalently <code>(L, S)</code>. Liquidity "stays centered around consensus"
-      <span data-tip="Consensus is defined as the midpoint of L and S in angle-space, so moving L or S mechanically moves consensus. The exponential depth shape around consensus falls out of the sinh invariant — it's not imposed, it's a consequence.">by construction</span>:
-      consensus is the midpoint of the distribution, not a fixed price.
+      <b>Fig 2.</b> Pool state as a point <span style="color:#fbbf24">(L, S)</span> on <code>L·S = K</code>.
+      Your pending trade (pink) slides along the hyperbola; execution tilts consensus toward the absorbing wing.
+      See <i>Definitions</i> for L, S, K, tilt.
     </div>
   </div>
 </section>
