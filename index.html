@@ -206,12 +206,12 @@
   </div>
   <div class="grid2">
     <div>
-      <div class="slider"><div class="top"><span class="lab">φ  drift angle</span><span class="val text-accent" id="t-phi-v">0.60</span></div>
-        <input type="range" id="t-phi" min="-2" max="2" step="0.01" value="0.6"></div>
-      <div class="slider"><div class="top"><span class="lab">w  sensitivity (1 = hold)</span><span class="val text-gold" id="t-w-v">1.00</span></div>
-        <input type="range" id="t-w" min="0.1" max="5" step="0.01" value="1"></div>
-      <div class="slider"><div class="top"><span class="lab">q  size (units)</span><span class="val text-cyan" id="t-q-v">1.00</span></div>
-        <input type="range" id="t-q" min="0.1" max="5" step="0.01" value="1"></div>
+      <div class="slider"><div class="top"><span class="lab">φ  drift angle</span><span class="val text-accent" id="t-phi-v">-0.39</span></div>
+        <input type="range" id="t-phi" min="-2" max="2" step="0.01" value="-0.39"></div>
+      <div class="slider"><div class="top"><span class="lab">w  sensitivity (1 = hold)</span><span class="val text-gold" id="t-w-v">0.28</span></div>
+        <input type="range" id="t-w" min="0.1" max="5" step="0.01" value="0.28"></div>
+      <div class="slider"><div class="top"><span class="lab">q  size (units)</span><span class="val text-cyan" id="t-q-v">2.15</span></div>
+        <input type="range" id="t-q" min="0.1" max="5" step="0.01" value="2.15"></div>
       <div id="trade-readouts" style="margin-top:10px;"></div>
       <div class="actions" style="margin-top:12px;">
         <button id="exec-btn" class="btn-exec">Commit Policy</button>
@@ -288,7 +288,7 @@ function previewTrade(pool, phiTrader, wIn, q) {
 const INITIAL = () => poolFromAngles(1.5, 1.5);
 const state = {
   pool: INITIAL(),
-  phi: 0.6, wIn: 1.0, q: 1.0,
+  phi: -0.39, wIn: 0.28, q: 2.15,
   log: [],
 };
 
