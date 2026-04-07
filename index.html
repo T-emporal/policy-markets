@@ -46,9 +46,8 @@
   .toggle button.on.short { color:var(--short); border-color:var(--short); background:rgba(239,68,68,.13); }
   .actions { display:flex; gap:8px; }
   .btn-exec { flex:1; padding:10px 14px; border-radius:4px; text-transform:uppercase;
-    letter-spacing:1.5px; font-size:12px; font-weight:700; }
-  .btn-exec.long { background:rgba(34,197,94,.13); color:var(--long); border:1px solid var(--long); }
-  .btn-exec.short { background:rgba(239,68,68,.13); color:var(--short); border:1px solid var(--short); }
+    letter-spacing:1.5px; font-size:12px; font-weight:700;
+    background:rgba(129,140,248,.13); color:var(--accent); border:1px solid var(--accent); }
   .btn-reset { padding:10px 14px; background:transparent; color:var(--dim);
     border:1px solid var(--border); border-radius:4px; text-transform:uppercase;
     letter-spacing:1.5px; font-size:12px; }
@@ -119,8 +118,9 @@
   <div class="panel" style="margin-bottom:0;">
     <h2>Trade  ·  Commit a Policy</h2>
     <div class="small" style="margin-bottom:12px;">
-      Sign of <span class="text-accent">φ</span> sets the side: <span class="text-short">φ &gt; 0</span> sells rallies (short-like),
-      <span class="text-long">φ &lt; 0</span> buys dips (long-like). Magnitude = conviction.
+      A policy is a committed rule, not a directional bet. <span class="text-accent">φ</span> is your expected drift;
+      whether you end up buying or selling depends on the realized path vs. φ. The sign of φ relative to consensus
+      <span class="text-gold">φ*</span> only determines which way your commitment tilts the pool.
     </div>
     <div class="slider"><div class="top"><span class="lab">φ  drift angle</span><span class="val text-accent" id="t-phi-v">0.60</span></div>
       <input type="range" id="t-phi" min="-2" max="2" step="0.01" value="0.6"></div>
@@ -130,14 +130,14 @@
       <input type="range" id="t-q" min="0.1" max="5" step="0.01" value="1"></div>
     <div id="trade-readouts" style="margin:14px 0;"></div>
     <div class="actions">
-      <button id="exec-btn" class="btn-exec long">Commit Policy</button>
+      <button id="exec-btn" class="btn-exec">Commit Policy</button>
       <button id="reset-btn" class="btn-reset">Reset</button>
     </div>
     <div style="margin-top:16px;">
       <div class="section-label">Transaction log</div>
       <div class="log">
         <table>
-          <thead><tr><th>#</th><th>side</th><th>φ</th><th>w_in</th><th>δ</th><th>ρ</th><th>cost</th></tr></thead>
+          <thead><tr><th>#</th><th>φ</th><th>w_in</th><th>q</th><th>δ</th><th>ρ</th><th>cost</th></tr></thead>
           <tbody id="log-body"><tr><td colspan="7" class="empty">no trades yet</td></tr></tbody>
         </table>
       </div>
@@ -338,10 +338,10 @@ function renderTrade(preview) {
   document.getElementById('t-w-v').textContent = state.wIn.toFixed(2);
   document.getElementById('t-q-v').textContent = state.q.toFixed(2);
 
-  const sideColor = preview.side === 'long' ? '#22c55e' : '#ef4444';
+  const tilt = preview.dphi >= 0 ? 'above φ*' : 'below φ*';
   document.getElementById('trade-readouts').innerHTML =
-    rowHTML('Δφ  signed drift', fmt(preview.dphi)) +
-    rowHTML('side  (sign of φ)', preview.side.toUpperCase(), sideColor) +
+    rowHTML('φ  expected drift', fmt(preview.dphi)) +
+    rowHTML('consensus tilt', tilt, '#818cf8') +
     rowHTML('δ  effective size', fmt(preview.delta), '#f472b6') +
     rowHTML('ρ  sensitivity ratio', fmt(preview.rho), '#fbbf24') +
     rowHTML('w_out  received', fmt(preview.wOut)) +
@@ -349,10 +349,6 @@ function renderTrade(preview) {
     rowHTML('cost (BTC)', fmt(preview.cost), '#22d3ee') +
     rowHTML('slippage', (preview.slippage * 100).toFixed(2) + '%') +
     rowHTML('price after', fmt(preview.priceAfter), '#fbbf24');
-
-  const execBtn = document.getElementById('exec-btn');
-  execBtn.classList.remove('long', 'short');
-  execBtn.classList.add(preview.side);
 }
 
 function renderLog() {
@@ -364,9 +360,9 @@ function renderLog() {
   tbody.innerHTML = state.log.map((t, i) => `
     <tr>
       <td>${i + 1}</td>
-      <td style="color:${t.side === 'long' ? '#22c55e' : '#ef4444'}">${t.side}</td>
       <td>${t.phi.toFixed(2)}</td>
       <td>${t.wIn.toFixed(2)}</td>
+      <td>${t.q.toFixed(2)}</td>
       <td>${t.delta.toFixed(3)}</td>
       <td style="color:#fbbf24">${t.rho.toFixed(4)}</td>
       <td style="color:#22d3ee">${t.cost.toFixed(3)}</td>
@@ -486,7 +482,7 @@ document.getElementById('t-q').addEventListener('input', e => { state.q = parseF
 document.getElementById('exec-btn').addEventListener('click', () => {
   const p = previewTrade(state.pool, state.phi, state.wIn, state.q);
   state.pool = p.newPool;
-  state.log.push({ side: p.side, phi: state.phi, wIn: state.wIn, q: state.q,
+  state.log.push({ phi: state.phi, wIn: state.wIn, q: state.q,
     delta: p.delta, rho: p.rho, cost: p.cost });
   render();
 });
