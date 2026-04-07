@@ -232,26 +232,30 @@ function el(tag, attrs = {}, children = []) {
 }
 function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
 
-// ---------- synthetic BTC path (deterministic) ----------
+// ---------- synthetic BTC-like path (deterministic GBM + event shocks) ----------
 const PRICE_PATH = (() => {
-  const N = 180;
-  const pts = [];
-  // seeded LCG for reproducibility
-  let s = 1337;
+  const N = 220;
+  let s = 42;
   const rand = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
-  let v = 0;
+  const gauss = () => {
+    let u = 0, v = 0;
+    while (u === 0) u = rand();
+    while (v === 0) v = rand();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  };
+  // Daily log-returns with BTC-ish drift and vol, plus a few hand-placed pumps/dumps.
+  const mu = 0.004, sigma = 0.034;
+  const events = [[22,-0.09],[48,0.13],[78,-0.07],[105,0.16],[138,-0.11],[165,0.09],[195,0.12]];
+  const logp = [];
+  let lp = 0;
   for (let i = 0; i < N; i++) {
-    const t = i / (N - 1);
-    const trend = (t - 0.5) * 1.4;                       // mild upward drift
-    const cycle = Math.sin(t * Math.PI * 2.3) * 0.45;    // a couple of waves
-    const noise = (rand() - 0.5) * 0.35;
-    v = 0.85 * v + 0.15 * (trend + cycle + noise);       // smooth random walk
-    pts.push({ t, y: trend + cycle + v * 0.5 });
+    let r = mu + sigma * gauss();
+    for (const [idx, mag] of events) if (i === idx) r += mag;
+    lp += r;
+    logp.push(lp);
   }
-  // normalize y to [-1, 1]
-  const ys = pts.map(p => p.y);
-  const lo = Math.min(...ys), hi = Math.max(...ys);
-  return pts.map(p => ({ t: p.t, y: 2 * (p.y - lo) / (hi - lo) - 1 }));
+  const lo = Math.min(...logp), hi = Math.max(...logp);
+  return logp.map((y, i) => ({ t: i / (N - 1), y: 2 * (y - lo) / (hi - lo) - 1 }));
 })();
 
 // ---------- Section 1: explainer ----------
@@ -262,22 +266,21 @@ function renderExplainer() {
   document.getElementById('ex-q-v').textContent = q.toFixed(2);
   const svg = document.getElementById('ex-svg');
   clear(svg);
-  const W = 560, H = 220, cx = W/2, cy = H/2;
+  const W = 560, H = 220, cy = H/2;
   const slope = Math.tan(phi * 0.6);
   const x1 = 20, x2 = W - 20;
 
-  // synthetic BTC path: only past (left half) is real history; right half is empty future.
+  // Realized BTC path spans the full width. Right edge = today (t=0).
   const amp = 80;
-  const pastPts = PRICE_PATH.map(p => {
-    const px = x1 + p.t * (cx - x1);
-    const py = cy - p.y * amp;
-    return { px, py };
-  });
-  // "today" is the most recent price point
-  const today = pastPts[pastPts.length - 1];
-  // drift line pivots at (today) and projects forward into the future half
-  const dy_future = today.py - slope * (x2 - today.px);
-  const dy_past_left = today.py - slope * (x1 - today.px);   // hypothetical past extrapolation
+  const pricePts = PRICE_PATH.map(p => ({
+    px: x1 + p.t * (x2 - x1),
+    py: cy - p.y * amp,
+  }));
+  const today = pricePts[pricePts.length - 1];
+
+  // Drift line is the trader's expected drift over this period, anchored at today
+  // and extending leftward across the full chart. φ rotates around (today.px, today.py).
+  const dy_left = today.py - slope * (x1 - today.px);
 
   const lw = Math.log(Math.max(w, 1e-9));
   const intensityScale = Math.abs(lw);
@@ -288,8 +291,7 @@ function renderExplainer() {
   const maxOpacity = Math.min(0.9, 0.18 + q * 0.16);
   const samples = 28;
 
-  // Gradient zones only on the FUTURE half (today → x2). Anchored to the projected drift line.
-  const fy_today = today.py, fy_future = dy_future;
+  // Gradient zones span the full chart, anchored to the drift line.
   for (let i = 0; i < samples; i++) {
     const t0 = i / samples, t1 = (i + 1) / samples;
     const devTop = (H * 0.55) * t1;
@@ -298,55 +300,50 @@ function renderExplainer() {
     const action = Math.min(1, intensityScale * devMid / refDev);
     const op = action * maxOpacity;
     svg.appendChild(el('path', {
-      d: `M${today.px},${fy_today-devTop} L${x2},${fy_future-devTop} L${x2},${fy_future-devBot} L${today.px},${fy_today-devBot} Z`,
+      d: `M${x1},${dy_left-devTop} L${today.px},${today.py-devTop} L${today.px},${today.py-devBot} L${x1},${dy_left-devBot} Z`,
       fill:upperColor, 'fill-opacity':op, stroke:'none'
     }));
     svg.appendChild(el('path', {
-      d: `M${today.px},${fy_today+devBot} L${x2},${fy_future+devBot} L${x2},${fy_future+devTop} L${today.px},${fy_today+devTop} Z`,
+      d: `M${x1},${dy_left+devBot} L${today.px},${today.py+devBot} L${today.px},${today.py+devTop} L${x1},${dy_left+devTop} Z`,
       fill:lowerColor, 'fill-opacity':op, stroke:'none'
     }));
   }
 
-  // past price path
+  // realized price path
   svg.appendChild(el('polyline', {
-    points: pastPts.map(p => `${p.px},${p.py}`).join(' '),
+    points: pricePts.map(p => `${p.px},${p.py}`).join(' '),
     fill:'none', stroke:'#e4e6ee', 'stroke-width':1.5, 'stroke-opacity':0.9
   }));
 
-  // hypothetical past drift line (faded, dashed) — what the policy would have meant historically
+  // drift line (solid dashed gold) — trader's expected drift
   svg.appendChild(el('line', {
-    x1, y1: dy_past_left, x2: today.px, y2: today.py,
-    stroke:'#fbbf24', 'stroke-width':1, 'stroke-dasharray':'2 4', 'stroke-opacity':0.35
-  }));
-  // forward drift line (solid, bright) — the actual commitment
-  svg.appendChild(el('line', {
-    x1: today.px, y1: today.py, x2, y2: dy_future,
+    x1, y1: dy_left, x2: today.px, y2: today.py,
     stroke:'#fbbf24', 'stroke-width':2, 'stroke-dasharray':'4 3'
   }));
 
-  // today vertical marker
-  svg.appendChild(el('line', { x1: cx, y1: 4, x2: cx, y2: H-18, stroke:'#818cf8', 'stroke-dasharray':'2 3', 'stroke-opacity':0.6 }));
-  svg.appendChild(el('text', { x: cx + 4, y: 14, fill:'#818cf8', 'font-size':10 }, 'today · t=0'));
-  svg.appendChild(el('circle', { cx: today.px, cy: today.py, r: 3, fill:'#fbbf24' }));
+  // today marker at right edge
+  svg.appendChild(el('line', { x1: today.px, y1: 4, x2: today.px, y2: H-18, stroke:'#818cf8', 'stroke-dasharray':'2 3', 'stroke-opacity':0.6 }));
+  svg.appendChild(el('text', { x: today.px - 4, y: 14, fill:'#818cf8', 'font-size':10, 'text-anchor':'end' }, 'today · t=0'));
+  svg.appendChild(el('circle', { cx: today.px, cy: today.py, r: 3.5, fill:'#fbbf24' }));
 
-  // q controls dot count along the FORWARD drift line
+  // q controls dot count along the drift line
   const n = Math.max(1, Math.round(q * 2));
   for (let i = 0; i < n; i++) {
     const t = (i + 0.5) / n;
-    const dx = today.px + t * (x2 - today.px);
-    const dyy = today.py + t * (dy_future - today.py);
+    const dx = x1 + t * (today.px - x1);
+    const dyy = dy_left + t * (today.py - dy_left);
     svg.appendChild(el('circle', { cx: dx, cy: dyy, r:3, fill:'#fbbf24' }));
   }
 
-  // past tick marks: validation — where the policy would have bought/sold historically
-  for (let i = 0; i < pastPts.length; i += 6) {
-    const p = pastPts[i];
+  // tick marks on the realized path: where the policy would have bought/sold
+  for (let i = 0; i < pricePts.length; i += 6) {
+    const p = pricePts[i];
     const tFrac = (p.px - x1) / (today.px - x1);
-    const driftYpast = dy_past_left + tFrac * (today.py - dy_past_left);
-    const above = p.py < driftYpast;
+    const driftY = dy_left + tFrac * (today.py - dy_left);
+    const above = p.py < driftY;
     svg.appendChild(el('circle', {
       cx: p.px, cy: p.py, r: 1.8,
-      fill: above ? upperColor : lowerColor, 'fill-opacity': 0.7
+      fill: above ? upperColor : lowerColor, 'fill-opacity': 0.75
     }));
   }
   const upperLabel = flipped ? 'BUY (contrarian) · price above φ' : 'SELL · price above φ';
@@ -356,8 +353,7 @@ function renderExplainer() {
   const regime = w === 1 ? 'w=1 · holding (no action)'
               : w > 1   ? 'w>1 · trend-following'
               :            'w<1 · contrarian';
-  svg.appendChild(el('text', { x:8, y:14, fill:'#e4e6ee', 'font-size':10 }, 'BTC · past 1y'));
-  svg.appendChild(el('text', { x:cx+4, y:H-22, fill:'#fbbf24', 'font-size':10 }, '↗ commitment forward'));
+  svg.appendChild(el('text', { x:8, y:14, fill:'#e4e6ee', 'font-size':10 }, 'BTC · realized 1y'));
   svg.appendChild(el('text', { x:8, y:H-6, fill:'#fbbf24', 'font-size':10 }, regime));
 }
 
