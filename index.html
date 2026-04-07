@@ -131,7 +131,7 @@
       <dd><code>δ = q · log(w) · sinh(φ − φ*)</code>. Signed. Zero at w=1. Sign tells you which reserve absorbs the commitment: δ &gt; 0 pushes into L, δ &lt; 0 pushes into S.</dd>
 
       <dt><span class="text-gold">ρ  sensitivity ratio</span></dt>
-      <dd>Dimensionless execution quality in (0, 1]. <span class="text-gold">ρ = (actual fill) / (market-clearing price)</span>. ρ = 1 means infinite liquidity (no impact); ρ → 0 means pool exhaustion. <b>Not a one-time fee</b> — it's the permanent quality locked into every future rebalance this policy makes.</dd>
+      <dd>Dimensionless execution efficiency in (0, 1]. <span class="text-gold">ρ = (value actually received) / (value at the clearing quote)</span>. A frictionless pool would return your commitment's full notional at the marginal price; the AMM returns ρ of it. ρ = 1 ⇔ no impact (infinite depth or infinitesimal trade). ρ → 0 ⇔ the pool was thin and most of your notional got eaten by moving the price against yourself. <b>Not a one-time fee</b> — it's the permanent efficiency locked into every future rebalance this policy makes.</dd>
 
       <dt>w_out = w_in^ρ</dt>
       <dd>The counter-policy the trader receives. In log-space, <code>log(w_out) = ρ · log(w_in)</code> — ρ is the fraction of log-sensitivity preserved. Fixed point at w=1.</dd>
@@ -235,13 +235,17 @@
 
 <!-- SECTION 3 -->
 <section class="panel">
-  <h2>Sensitivity Ratio Explorer  ·  ρ = fill / clearing</h2>
+  <h2>Sensitivity Ratio Explorer  ·  ρ = value received / value at clearing quote</h2>
   <svg id="rho-svg" viewBox="0 0 900 320"></svg>
   <div class="narration">
-    <p class="lead">ρ is the dimensionless ratio of what you actually got to what the market quoted — the fraction of ideal execution.</p>
-    <p>Formally, <span data-tip="Market-clearing price = marginal price before your trade (S/L). Actual fill = average execution price for your committed size δ. ρ is their ratio, always in (0, 1].">ρ = (average fill price) / (marginal clearing price)</span>.
-      ρ = 1 means you executed at exactly the quoted price — infinite liquidity, zero impact. ρ → 0 means the pool was thin enough that you
-      moved the price dramatically against yourself. It's a <b>pure number</b>, not a price and not a fee.</p>
+    <p class="lead">ρ is a value-preservation efficiency, not a price. It's the fraction of your commitment's notional value that survives execution.</p>
+    <p>Imagine a frictionless pool with infinite depth: every unit of your commitment δ would execute exactly at the current marginal
+      (clearing) quote, so you'd receive <code>δ · P_clearing</code> worth of output. The real AMM only returns
+      <span data-tip="The pool absorbs δ and returns less output than the marginal quote would imply, because executing δ itself moves the quote. The shortfall is exactly (1 − ρ) of the notional.">ρ · (that ideal amount)</span>.
+      The rest is eaten by the pool moving against you as you push into it. ρ is a <b>pure dimensionless number</b> in (0, 1] — no
+      directional ambiguity, no "price of X in Y" to pick.</p>
+    <p>ρ = 1 ⇔ no impact (infinite depth, or infinitesimal commitment). ρ → 0 ⇔ the pool was thin enough that most of your notional
+      value vanished into price impact — you "moved the price against yourself" so far that almost nothing came back.</p>
     <p>Each curve shows how ρ decays as your drift gap |Δφ| grows, for a pool of depth K. Bigger pools (lighter curves) decay more slowly —
       same conviction, better fill. The highlighted curve is your current pool. The pink dot is your current commitment's (|Δφ|, ρ).</p>
     <p class="lead">Why this matters: ρ is not a one-time cost. It's the <span class="text-gold">permanent execution quality</span> locked into
@@ -529,7 +533,7 @@ function renderTrade(preview) {
     rowHTML('φ  expected drift', fmt(preview.dphi), null, 'Your expected drift angle. Not a bet on direction — the anchor around which your rebalancing rule fires.') +
     rowHTML('pool tilt', tilt, tiltColor, 'Which reserve your commitment pushes into. Determined by sign(δ) = sign(log w)·sign(φ−φ*).') +
     rowHTML('δ  effective size', fmt(preview.delta), '#f472b6', 'δ = q · log(w) · sinh(φ − φ*). Signed effective commitment size. Zero at w=1.') +
-    rowHTML('ρ  sensitivity ratio', fmt(preview.rho), '#fbbf24', 'Dimensionless execution quality in (0,1]. ρ = avg fill / marginal clearing. Permanent quality locked into every future rebalance.') +
+    rowHTML('ρ  sensitivity ratio', fmt(preview.rho), '#fbbf24', 'Value-preservation efficiency in (0,1]. ρ = (value received) / (value at the clearing quote). ρ=1 is no impact; ρ→0 means the pool was thin and most notional got eaten by price impact. Permanent quality locked into every future rebalance.') +
     rowHTML('w_out  received', fmt(preview.wOut), null, 'Counter-policy you receive: w_out = w_in^ρ. In log-space, ρ fraction of your sensitivity is preserved.') +
     rowHTML('w_net  net exposure', fmt(preview.wNet), null, 'w_in^(1−ρ). The residual "distance from neutral" after the AMM absorbs some.') +
     rowHTML('cost (BTC)', fmt(preview.cost), '#22d3ee', 'BTC paid to execute. Scales with |δ| and pool imbalance.') +
