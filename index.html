@@ -282,7 +282,7 @@ function rowHTML(k, v, color) {
 
 function renderPool() {
   const pool = state.pool;
-  const preview = previewTrade(pool, state.phi, state.wIn);
+  const preview = previewTrade(pool, state.phi, state.wIn, state.q);
   const svg = document.getElementById('pool-svg');
   clear(svg);
   const W = 420, H = 320, pad = 36;
