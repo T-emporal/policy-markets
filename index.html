@@ -165,7 +165,7 @@
     <span class="pill" style="border:1px solid rgba(129,140,248,.4); background:rgba(129,140,248,.08); color:var(--accent);">sinh(Φ_L) · sinh(Φ_S) = K</span>
     <span class="pill" style="border:1px solid rgba(251,191,36,.4); background:rgba(251,191,36,.08); color:var(--gold);">ρ = S / (L + δ)</span>
     <span class="pill" style="border:1px solid rgba(34,211,238,.4); background:rgba(34,211,238,.08); color:var(--cyan);">BTC ≡ (φ*, 1, 1)</span>
-    <span class="pill" style="border:1px solid rgba(244,114,182,.4); background:rgba(244,114,182,.08); color:var(--pink);">δ = w · sinh(φ − φ*)</span>
+    <span class="pill" style="border:1px solid rgba(244,114,182,.4); background:rgba(244,114,182,.08); color:var(--pink);">δ = q · w · sinh(φ − φ*)</span>
   </div>
   Policy Markets — Working Paper 2026
 </footer>
@@ -182,9 +182,9 @@ function poolFromLS(L, S) { return { phiL: asinh(L), phiS: asinh(S), L, S, K: L 
 // Signed δ. φ > 0 ⇒ trader expects upward drift relative to consensus,
 // so they synthetically sell rallies → δ pushed into S (short-like).
 // φ < 0 ⇒ they buy dips → δ pushed into L (long-like).
-function previewTrade(pool, phiTrader, wIn) {
+function previewTrade(pool, phiTrader, wIn, q) {
   const dphi = phiTrader;                  // signed
-  const delta = wIn * sinh(dphi);          // signed effective size
+  const delta = q * wIn * sinh(dphi);      // signed effective size, scaled by units
   const mag = Math.abs(delta);
   const side = dphi >= 0 ? 'short' : 'long';
   let L1, S1, rho, cost;
@@ -236,24 +236,43 @@ function renderExplainer() {
   const x1 = 20, x2 = W - 20;
   const y1 = cy - slope * (x1 - cx);
   const y2 = cy - slope * (x2 - cx);
-  const band = 40 * w;
-  const intensity = Math.min(0.8, 0.15 + w * 0.18);
-  // sell zone
-  svg.appendChild(el('path', { d:`M${x1},${y1-band} L${x2},${y2-band} L${x2},${y2} L${x1},${y1} Z`,
-    fill:'#ef4444', 'fill-opacity':intensity }));
-  // buy zone
-  svg.appendChild(el('path', { d:`M${x1},${y1} L${x2},${y2} L${x2},${y2+band} L${x1},${y1+band} Z`,
-    fill:'#22c55e', 'fill-opacity':intensity }));
+
+  // Action intensity = saturate(w * |deviation| / refDev). Higher w → ramp saturates closer to the line.
+  // q scales overall opacity (more units committed = louder presence).
+  const refDev = 90;                        // pixels of deviation that fully saturates at w=1
+  const maxOpacity = Math.min(0.9, 0.18 + q * 0.16);
+  const samples = 28;                       // vertical samples per side for the gradient
+  const stripWidth = (x2 - x1);
+
+  for (let i = 0; i < samples; i++) {
+    const t0 = i / samples, t1 = (i + 1) / samples;
+    // sell side (above the drift line)
+    const devTop = (cy + 8) * t1;           // pixel deviation at outer edge
+    const devBot = (cy + 8) * t0;
+    const devMid = (devTop + devBot) / 2;
+    const action = Math.min(1, w * devMid / refDev);
+    const op = action * maxOpacity;
+    // upper strip: y from (drift - devTop) to (drift - devBot)
+    svg.appendChild(el('path', {
+      d: `M${x1},${y1-devTop} L${x2},${y2-devTop} L${x2},${y2-devBot} L${x1},${y1-devBot} Z`,
+      fill:'#ef4444', 'fill-opacity':op, stroke:'none'
+    }));
+    svg.appendChild(el('path', {
+      d: `M${x1},${y1+devBot} L${x2},${y2+devBot} L${x2},${y2+devTop} L${x1},${y1+devTop} Z`,
+      fill:'#22c55e', 'fill-opacity':op, stroke:'none'
+    }));
+  }
+
   // drift line
   svg.appendChild(el('line', { x1, y1, x2, y2, stroke:'#fbbf24', 'stroke-width':2, 'stroke-dasharray':'4 3' }));
-  // size dots
-  const n = Math.round(q * 2);
+  // q controls dot count along the drift line
+  const n = Math.max(1, Math.round(q * 2));
   for (let i = 0; i < n; i++) {
     const t = (i + 0.5) / n;
     svg.appendChild(el('circle', { cx: x1 + t*(x2-x1), cy: y1 + t*(y2-y1), r:3, fill:'#fbbf24' }));
   }
-  svg.appendChild(el('text', { x:W-8, y:14, fill:'#555770', 'font-size':10, 'text-anchor':'end' }, 'SELL ZONE'));
-  svg.appendChild(el('text', { x:W-8, y:H-6, fill:'#555770', 'font-size':10, 'text-anchor':'end' }, 'BUY ZONE'));
+  svg.appendChild(el('text', { x:W-8, y:14, fill:'#555770', 'font-size':10, 'text-anchor':'end' }, 'SELL · price ran ahead'));
+  svg.appendChild(el('text', { x:W-8, y:H-6, fill:'#555770', 'font-size':10, 'text-anchor':'end' }, 'BUY · price lagged'));
 }
 
 // ---------- Section 2: pool + trade ----------
@@ -465,7 +484,7 @@ document.getElementById('t-w').addEventListener('input', e => { state.wIn = pars
 document.getElementById('t-q').addEventListener('input', e => { state.q = parseFloat(e.target.value); render(); });
 
 document.getElementById('exec-btn').addEventListener('click', () => {
-  const p = previewTrade(state.pool, state.phi, state.wIn);
+  const p = previewTrade(state.pool, state.phi, state.wIn, state.q);
   state.pool = p.newPool;
   state.log.push({ side: p.side, phi: state.phi, wIn: state.wIn, q: state.q,
     delta: p.delta, rho: p.rho, cost: p.cost });
