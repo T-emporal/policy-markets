@@ -277,10 +277,12 @@ function renderExplainer() {
     py: cy - p.y * amp,
   }));
   const today = pricePts[pricePts.length - 1];
+  const start = pricePts[0];                    // 1y ago — anchor for the backtest
 
-  // Drift line is the trader's expected drift over this period, anchored at today
-  // and extending leftward across the full chart. φ rotates around (today.px, today.py).
-  const dy_left = today.py - slope * (x1 - today.px);
+  // Drift line: anchored at the start (1y ago), extending forward to today.
+  // φ rotates around (start.px, start.py). This makes the explainer a backtest:
+  // "if I had committed this policy 1y ago expecting drift φ, here's what would have happened."
+  const dy_right = start.py + slope * (today.px - start.px);
 
   const lw = Math.log(Math.max(w, 1e-9));
   const intensityScale = Math.abs(lw);
@@ -300,11 +302,11 @@ function renderExplainer() {
     const action = Math.min(1, intensityScale * devMid / refDev);
     const op = action * maxOpacity;
     svg.appendChild(el('path', {
-      d: `M${x1},${dy_left-devTop} L${today.px},${today.py-devTop} L${today.px},${today.py-devBot} L${x1},${dy_left-devBot} Z`,
+      d: `M${start.px},${start.py-devTop} L${today.px},${dy_right-devTop} L${today.px},${dy_right-devBot} L${start.px},${start.py-devBot} Z`,
       fill:upperColor, 'fill-opacity':op, stroke:'none'
     }));
     svg.appendChild(el('path', {
-      d: `M${x1},${dy_left+devBot} L${today.px},${today.py+devBot} L${today.px},${today.py+devTop} L${x1},${dy_left+devTop} Z`,
+      d: `M${start.px},${start.py+devBot} L${today.px},${dy_right+devBot} L${today.px},${dy_right+devTop} L${start.px},${start.py+devTop} Z`,
       fill:lowerColor, 'fill-opacity':op, stroke:'none'
     }));
   }
@@ -315,31 +317,33 @@ function renderExplainer() {
     fill:'none', stroke:'#e4e6ee', 'stroke-width':1.5, 'stroke-opacity':0.9
   }));
 
-  // drift line (solid dashed gold) — trader's expected drift
+  // drift line (dashed gold) — trader's expected drift, anchored at t=−1y
   svg.appendChild(el('line', {
-    x1, y1: dy_left, x2: today.px, y2: today.py,
+    x1: start.px, y1: start.py, x2: today.px, y2: dy_right,
     stroke:'#fbbf24', 'stroke-width':2, 'stroke-dasharray':'4 3'
   }));
 
-  // today marker at right edge
-  svg.appendChild(el('line', { x1: today.px, y1: 4, x2: today.px, y2: H-18, stroke:'#818cf8', 'stroke-dasharray':'2 3', 'stroke-opacity':0.6 }));
-  svg.appendChild(el('text', { x: today.px - 4, y: 14, fill:'#818cf8', 'font-size':10, 'text-anchor':'end' }, 'today · t=0'));
-  svg.appendChild(el('circle', { cx: today.px, cy: today.py, r: 3.5, fill:'#fbbf24' }));
+  // anchor marker at left edge (1y ago, commitment point)
+  svg.appendChild(el('line', { x1: start.px, y1: 4, x2: start.px, y2: H-18, stroke:'#818cf8', 'stroke-dasharray':'2 3', 'stroke-opacity':0.6 }));
+  svg.appendChild(el('text', { x: start.px + 4, y: 14, fill:'#818cf8', 'font-size':10 }, 'committed · t=−1y'));
+  svg.appendChild(el('circle', { cx: start.px, cy: start.py, r: 3.5, fill:'#fbbf24' }));
+  // today marker at right edge for reference
+  svg.appendChild(el('text', { x: today.px - 4, y: 14, fill:'#555770', 'font-size':10, 'text-anchor':'end' }, 'today'));
 
   // q controls dot count along the drift line
   const n = Math.max(1, Math.round(q * 2));
   for (let i = 0; i < n; i++) {
     const t = (i + 0.5) / n;
-    const dx = x1 + t * (today.px - x1);
-    const dyy = dy_left + t * (today.py - dy_left);
+    const dx = start.px + t * (today.px - start.px);
+    const dyy = start.py + t * (dy_right - start.py);
     svg.appendChild(el('circle', { cx: dx, cy: dyy, r:3, fill:'#fbbf24' }));
   }
 
   // tick marks on the realized path: where the policy would have bought/sold
   for (let i = 0; i < pricePts.length; i += 6) {
     const p = pricePts[i];
-    const tFrac = (p.px - x1) / (today.px - x1);
-    const driftY = dy_left + tFrac * (today.py - dy_left);
+    const tFrac = (p.px - start.px) / (today.px - start.px);
+    const driftY = start.py + tFrac * (dy_right - start.py);
     const above = p.py < driftY;
     svg.appendChild(el('circle', {
       cx: p.px, cy: p.py, r: 1.8,
