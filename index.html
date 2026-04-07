@@ -240,31 +240,6 @@
   </div>
 </section>
 
-<!-- SECTION 3 -->
-<section class="panel">
-  <h2>Sensitivity Ratio Explorer  ·  ρ = value received / value at clearing quote</h2>
-  <svg id="rho-svg" viewBox="0 0 900 320"></svg>
-  <div class="narration">
-    <p class="lead">ρ is a value-preservation efficiency, not a price. It's the fraction of your commitment's notional value that survives execution.</p>
-    <p>Imagine a frictionless pool with infinite depth: every unit of your commitment δ would execute exactly at the current marginal
-      (clearing) quote, so you'd receive <code>δ · P_clearing</code> worth of output. The real AMM only returns
-      <span data-tip="The pool absorbs δ and returns less output than the marginal quote would imply, because executing δ itself moves the quote. The shortfall is exactly (1 − ρ) of the notional.">ρ · (that ideal amount)</span>.
-      The rest is eaten by the pool moving against you as you push into it. ρ is a <b>pure dimensionless number</b> in (0, 1] — no
-      directional ambiguity, no "price of X in Y" to pick.</p>
-    <p>ρ = 1 ⇔ no impact (infinite depth, or infinitesimal commitment). ρ → 0 ⇔ the pool was thin enough that most of your notional
-      value vanished into price impact — you "moved the price against yourself" so far that almost nothing came back.</p>
-    <p>Each curve shows how ρ decays as your drift gap |Δφ| grows, for a pool of depth K. Bigger pools (lighter curves) decay more slowly —
-      same conviction, better fill. The highlighted curve is your current pool. The pink dot is your current commitment's (|Δφ|, ρ).</p>
-    <p class="lead">Why this matters: ρ is not a one-time cost. It's the <span class="text-gold">permanent execution quality</span> locked into
-      every future rebalance that fires under this policy. A w&gt;1 trend-follower with ρ=0.85 will, forever, translate 85% of log-sensitivity
-      into actual exposure changes when the market deviates from their expected drift. Commit a policy with ρ=0.4, and every future rebalance
-      leaks 60% of its intended action into the pool. Choose φ and q such that ρ stays high — or accept the erosion as the price of an
-      unusual conviction.</p>
-    <p>The counter-policy you receive is <code>w_out = w_in^ρ</code>. At ρ=1 you get your full sensitivity back;
-      at ρ=0 you get the trivial policy (w=1, just holding).</p>
-  </div>
-</section>
-
 <footer>
   <div style="margin-bottom:8px;">
     <span class="pill" style="border:1px solid rgba(129,140,248,.4); background:rgba(129,140,248,.08); color:var(--accent);">sinh(Φ_L) · sinh(Φ_S) = K</span>
@@ -609,64 +584,12 @@ function renderDepth(preview) {
   svg.appendChild(el('text', { x:W-12, y:20, fill:'#fbbf24', 'font-size':10, 'text-anchor':'end' }, '— λ(δ) impact'));
 }
 
-// ---------- Section 3: rho ----------
-function renderRho(preview) {
-  const svg = document.getElementById('rho-svg');
-  clear(svg);
-  const W = 900, H = 320, pad = 40;
-  const xMin = 0, xMax = 3;
-  const sx = (x) => pad + ((x - xMin) / (xMax - xMin)) * (W - pad - 10);
-  const sy = (y) => H - pad - y * (H - pad - 10);
-
-  svg.appendChild(el('line', { x1:pad, y1:H-pad, x2:W-4, y2:H-pad, stroke:'#1c1d30' }));
-  svg.appendChild(el('line', { x1:pad, y1:4, x2:pad, y2:H-pad, stroke:'#1c1d30' }));
-  svg.appendChild(el('text', { x:W-6, y:H-pad-6, fill:'#555770', 'font-size':10, 'text-anchor':'end' }, 'Δφ  drift gap'));
-  svg.appendChild(el('text', { x:pad+6, y:14, fill:'#555770', 'font-size':10 }, 'ρ'));
-
-  for (const y of [0, 0.25, 0.5, 0.75, 1]) {
-    svg.appendChild(el('line', { x1:pad, y1:sy(y), x2:W-4, y2:sy(y), stroke:'#1c1d30', 'stroke-opacity':0.4 }));
-    svg.appendChild(el('text', { x:pad-6, y:sy(y)+3, fill:'#555770', 'font-size':9, 'text-anchor':'end' }, String(y)));
-  }
-  for (const x of [0, 1, 2, 3]) {
-    svg.appendChild(el('text', { x:sx(x), y:H-pad+14, fill:'#555770', 'font-size':9, 'text-anchor':'middle' }, String(x)));
-  }
-
-  const Ks = [
-    { K: 1, color: '#5b6378' },
-    { K: 4, color: '#6f7aa3' },
-    { K: state.pool.K, color: '#818cf8', label: '◀ current' },
-    { K: 25, color: '#a78bfa' },
-    { K: 100, color: '#c4b5fd' },
-  ];
-  Ks.forEach((k, i) => {
-    const root = Math.sqrt(k.K), pts = [];
-    for (let j = 0; j <= 80; j++) {
-      const dphi = xMin + (j / 80) * (xMax - xMin);
-      const delta = sinh(dphi);
-      const rho = root / (root + delta);
-      pts.push(`${sx(dphi)},${sy(rho)}`);
-    }
-    svg.appendChild(el('polyline', { points: pts.join(' '), fill:'none',
-      stroke: k.color, 'stroke-width': i === 2 ? 2.2 : 1, 'stroke-opacity': i === 2 ? 1 : 0.6 }));
-    svg.appendChild(el('text', { x:W-14, y:20+i*14, fill:k.color, 'font-size':10, 'text-anchor':'end' },
-      `K = ${k.K.toFixed(2)}${k.label ? '  ' + k.label : ''}`));
-  });
-
-  const adphi = Math.abs(preview.dphi);
-  if (adphi <= xMax) {
-    svg.appendChild(el('circle', { cx:sx(adphi), cy:sy(preview.rho), r:6, fill:'#f472b6' }));
-    svg.appendChild(el('text', { x:sx(adphi)+10, y:sy(preview.rho)-6, fill:'#f472b6', 'font-size':10 },
-      `|Δφ| = ${adphi.toFixed(2)}, ρ = ${preview.rho.toFixed(4)}`));
-  }
-}
-
 // ---------- main render ----------
 function render() {
   renderExplainer();
   const preview = renderPool();
   renderTrade(preview);
   renderDepth(preview);
-  renderRho(preview);
   renderLog();
 }
 
