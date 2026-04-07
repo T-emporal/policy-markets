@@ -223,6 +223,28 @@ function el(tag, attrs = {}, children = []) {
 }
 function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
 
+// ---------- synthetic BTC path (deterministic) ----------
+const PRICE_PATH = (() => {
+  const N = 180;
+  const pts = [];
+  // seeded LCG for reproducibility
+  let s = 1337;
+  const rand = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+  let v = 0;
+  for (let i = 0; i < N; i++) {
+    const t = i / (N - 1);
+    const trend = (t - 0.5) * 1.4;                       // mild upward drift
+    const cycle = Math.sin(t * Math.PI * 2.3) * 0.45;    // a couple of waves
+    const noise = (rand() - 0.5) * 0.35;
+    v = 0.85 * v + 0.15 * (trend + cycle + noise);       // smooth random walk
+    pts.push({ t, y: trend + cycle + v * 0.5 });
+  }
+  // normalize y to [-1, 1]
+  const ys = pts.map(p => p.y);
+  const lo = Math.min(...ys), hi = Math.max(...ys);
+  return pts.map(p => ({ t: p.t, y: 2 * (p.y - lo) / (hi - lo) - 1 }));
+})();
+
 // ---------- Section 1: explainer ----------
 function renderExplainer() {
   const { phi, w, q } = state.ex;
@@ -263,7 +285,29 @@ function renderExplainer() {
     }));
   }
 
-  // drift line
+  // synthetic BTC path overlay
+  const amp = 80;                                        // pixel amplitude of path around cy
+  const pathPts = PRICE_PATH.map(p => {
+    const px = x1 + p.t * (x2 - x1);
+    const py = cy - p.y * amp;
+    return { px, py };
+  });
+  svg.appendChild(el('polyline', {
+    points: pathPts.map(p => `${p.px},${p.py}`).join(' '),
+    fill:'none', stroke:'#e4e6ee', 'stroke-width':1.5, 'stroke-opacity':0.85
+  }));
+  // tick marks colored by which side of the drift line they sit on
+  for (let i = 0; i < pathPts.length; i += 6) {
+    const p = pathPts[i];
+    const driftY = y1 + ((p.px - x1) / (x2 - x1)) * (y2 - y1);
+    const above = p.py < driftY;                         // SVG y is inverted
+    svg.appendChild(el('circle', {
+      cx: p.px, cy: p.py, r: 1.8,
+      fill: above ? '#ef4444' : '#22c55e'
+    }));
+  }
+
+  // drift line (drawn after path so it sits on top)
   svg.appendChild(el('line', { x1, y1, x2, y2, stroke:'#fbbf24', 'stroke-width':2, 'stroke-dasharray':'4 3' }));
   // q controls dot count along the drift line
   const n = Math.max(1, Math.round(q * 2));
@@ -271,8 +315,9 @@ function renderExplainer() {
     const t = (i + 0.5) / n;
     svg.appendChild(el('circle', { cx: x1 + t*(x2-x1), cy: y1 + t*(y2-y1), r:3, fill:'#fbbf24' }));
   }
-  svg.appendChild(el('text', { x:W-8, y:14, fill:'#555770', 'font-size':10, 'text-anchor':'end' }, 'SELL · price ran ahead'));
-  svg.appendChild(el('text', { x:W-8, y:H-6, fill:'#555770', 'font-size':10, 'text-anchor':'end' }, 'BUY · price lagged'));
+  svg.appendChild(el('text', { x:W-8, y:14, fill:'#555770', 'font-size':10, 'text-anchor':'end' }, 'SELL · price above φ'));
+  svg.appendChild(el('text', { x:W-8, y:H-6, fill:'#555770', 'font-size':10, 'text-anchor':'end' }, 'BUY · price below φ'));
+  svg.appendChild(el('text', { x:8, y:14, fill:'#e4e6ee', 'font-size':10 }, 'BTC (synthetic 1y)'));
 }
 
 // ---------- Section 2: pool + trade ----------
