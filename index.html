@@ -166,15 +166,40 @@
   </div>
 </details>
 
-<!-- SECTION 1 -->
+<!-- SECTION 1 · the two graphs side by side -->
+<section class="grid2">
+  <div class="panel" style="margin-bottom:0;">
+    <h2>Policy  ·  Backtest</h2>
+    <svg id="ex-svg" viewBox="0 0 560 260" style="height:260px;"></svg>
+    <div class="small" style="margin-top:10px; line-height:1.55;">
+      <b>Fig 1.</b> The dashed gold line is the trader's expected drift <span class="text-accent">φ</span>,
+      anchored 1 year ago. Green and red zones show where the policy would have bought and sold along the
+      realized BTC path. <span class="text-gold">w = 1</span> is the trivial policy (just hold);
+      <span class="text-gold">w &gt; 1</span> is trend-following; <span class="text-gold">w &lt; 1</span>
+      is contrarian (colors flip). <span class="text-cyan">q</span> scales the intensity.
+    </div>
+  </div>
+  <div class="panel" style="margin-bottom:0;">
+    <h2>Pool State  ·  L · S = K</h2>
+    <svg id="pool-svg" viewBox="0 0 480 260" style="height:260px;"></svg>
+    <div class="small" style="margin-top:10px; line-height:1.55;">
+      <b>Fig 2.</b> The pool's state is a single point <span style="color:#fbbf24">(L, S)</span> on the
+      hyperbola <code>L·S = K</code>. L and S are the <i>wing weights</i> of the committed policy distribution
+      above and below consensus φ*. Your pending trade (pink) slides the point along the curve; execution tilts
+      consensus toward whichever wing absorbed the commitment.
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 2 · trade controls -->
 <section class="panel">
   <h2>Commit a Policy</h2>
-  <div class="small" style="margin-bottom:14px; color:var(--text); font-size:12px; line-height:1.6;">
-    A policy is a committed rebalancing program: <span class="text-accent">(φ, w, q)</span> — drift angle, sensitivity, size.
-    BTC itself is the trivial policy <span class="text-gold">(φ*, 1, 1)</span>. Move the sliders to commit against the pool
-    — the chart shows the backtest, the readouts show execution, and the pool state below updates live.
+  <div class="small" style="margin-bottom:14px; line-height:1.55;">
+    A policy is a committed rebalancing program: <span class="text-accent">(φ, w, q)</span> — drift angle,
+    sensitivity, size. BTC itself is the trivial policy <span class="text-gold">(φ*, 1, 1)</span>.
+    Slide to preview; the figures above update live.
   </div>
-  <div class="grid-explainer">
+  <div class="grid2">
     <div>
       <div class="slider"><div class="top"><span class="lab">φ  drift angle</span><span class="val text-accent" id="t-phi-v">0.60</span></div>
         <input type="range" id="t-phi" min="-2" max="2" step="0.01" value="0.6"></div>
@@ -182,20 +207,14 @@
         <input type="range" id="t-w" min="0.1" max="5" step="0.01" value="1"></div>
       <div class="slider"><div class="top"><span class="lab">q  size (units)</span><span class="val text-cyan" id="t-q-v">1.00</span></div>
         <input type="range" id="t-q" min="0.1" max="5" step="0.01" value="1"></div>
-      <div id="trade-readouts" style="margin:14px 0;"></div>
-      <div class="actions">
+      <div class="actions" style="margin-top:6px;">
         <button id="exec-btn" class="btn-exec">Commit Policy</button>
         <button id="reset-btn" class="btn-reset">Reset</button>
       </div>
     </div>
     <div>
-      <svg id="ex-svg" viewBox="0 0 560 220"></svg>
-      <div class="small" style="margin-top:8px;">
-        <span class="text-gold">w = 1</span> is the trivial policy — no action, just hold.
-        <span class="text-gold">w &gt; 1</span> is trend-following: weight in the asset moves more sharply than holding would.
-        <span class="text-gold">w &lt; 1</span> is contrarian: weight moves less sharply (or opposite). The colors flip in this regime.
-        Distance of <span class="text-accent">φ</span> from consensus is conviction; <span class="text-cyan">q</span> is size.
-      </div>
+      <div id="trade-readouts"></div>
+      <div id="pool-readouts" style="margin-top:10px;"></div>
     </div>
   </div>
   <div style="margin-top:18px;">
@@ -207,27 +226,16 @@
       </table>
     </div>
   </div>
-</section>
-
-<!-- SECTION 2 -->
-<section class="panel">
-    <h2>Pool State  ·  L · S = K</h2>
-    <svg id="pool-svg" viewBox="0 0 420 320"></svg>
-    <div id="pool-readouts" style="margin-top:12px;"></div>
-    <div class="narration">
-      <p class="lead">The pool state is the distribution of all committed policies, summarized in two numbers.</p>
-      <p><b>L</b> and <b>S</b> are the <i>wing weights</i> — cumulative commitment mass on each side of consensus φ*,
-        in sinh-angle coordinates. L counts policies committed above φ*; S counts policies committed below.
-        They're not reserves of tokens; they're bookkeeping for how the committed population is distributed around the mean.</p>
-      <p>The curve <code>L·S = K</code> is the set of all states with the same <b>depth</b>. A trade
-        (the pink preview) slides you along this hyperbola — shifting the balance between L and S, which
-        tilts consensus toward whichever side absorbed the commitment. A liquidity event (not shown) would jump
-        the entire curve inward or outward to a different K.</p>
-      <p>So the full state manifold is 2-dimensional: <code>(K, tilt)</code>, or equivalently <code>(L, S)</code>.
-        Trades exercise the tilt axis; liquidity exercises the depth axis.
-        Liquidity "stays centered around consensus" <span data-tip="Consensus is defined as the midpoint of L and S in angle-space, so moving L or S mechanically moves consensus. The exponential depth shape around consensus falls out of the sinh invariant — it's not imposed, it's a consequence.">by construction</span>:
-        consensus is the midpoint of the distribution, not a fixed price.</p>
-    </div>
+  <div class="narration">
+    <p><b>L</b> and <b>S</b> are the wing weights — cumulative commitment mass on each side of consensus φ*,
+      in sinh-angle coordinates. Not reserves of tokens; bookkeeping for how the committed population is
+      distributed around the mean. The curve <code>L·S = K</code> is the set of all states at the same
+      <b>depth</b>. A trade slides you along this hyperbola; a liquidity event (not shown) would jump you
+      to a different K. So the state manifold is 2-dimensional: <code>(K, tilt)</code>, or equivalently
+      <code>(L, S)</code>. Liquidity "stays centered around consensus"
+      <span data-tip="Consensus is defined as the midpoint of L and S in angle-space, so moving L or S mechanically moves consensus. The exponential depth shape around consensus falls out of the sinh invariant — it's not imposed, it's a consequence.">by construction</span>:
+      consensus is the midpoint of the distribution, not a fixed price.</p>
+  </div>
 </section>
 
 <footer>
@@ -443,7 +451,7 @@ function renderPool() {
   const preview = previewTrade(pool, state.phi, state.wIn, state.q);
   const svg = document.getElementById('pool-svg');
   clear(svg);
-  const W = 420, H = 320, pad = 36;
+  const W = 480, H = 260, pad = 36;
   const maxAxis = Math.max(4, Math.sqrt(pool.K) * 3);
   const sx = (l) => pad + (l / maxAxis) * (W - pad - 10);
   const sy = (s) => H - pad - (s / maxAxis) * (H - pad - 10);
