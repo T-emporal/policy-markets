@@ -100,9 +100,10 @@
     <div>
       <svg id="ex-svg" viewBox="0 0 560 220"></svg>
       <div class="small" style="margin-top:8px;">
-        <span style="color:var(--text)">w = 1</span> means just holding.
-        <span style="color:var(--text)">w &gt; 1</span> means actively buying dips and selling rallies around your drift.
-        The further your drift <span class="text-accent">φ</span> from consensus, the stronger your conviction.
+        <span class="text-gold">w = 1</span> is the trivial policy — no action, just hold.
+        <span class="text-gold">w &gt; 1</span> is trend-following: weight in the asset moves more sharply than holding would.
+        <span class="text-gold">w &lt; 1</span> is contrarian: weight moves less sharply (or opposite). The colors flip in this regime.
+        Distance of <span class="text-accent">φ</span> from consensus is conviction; <span class="text-cyan">q</span> is size.
       </div>
     </div>
   </div>
@@ -124,7 +125,7 @@
     </div>
     <div class="slider"><div class="top"><span class="lab">φ  drift angle</span><span class="val text-accent" id="t-phi-v">0.60</span></div>
       <input type="range" id="t-phi" min="-2" max="2" step="0.01" value="0.6"></div>
-    <div class="slider"><div class="top"><span class="lab">w_in  sensitivity</span><span class="val text-gold" id="t-w-v">1.00</span></div>
+    <div class="slider"><div class="top"><span class="lab">w_in  sensitivity (1 = hold)</span><span class="val text-gold" id="t-w-v">1.00</span></div>
       <input type="range" id="t-w" min="0.1" max="5" step="0.01" value="1"></div>
     <div class="slider"><div class="top"><span class="lab">q  units</span><span class="val text-cyan" id="t-q-v">1.00</span></div>
       <input type="range" id="t-q" min="0.1" max="5" step="0.01" value="1"></div>
@@ -163,32 +164,36 @@
 <footer>
   <div style="margin-bottom:8px;">
     <span class="pill" style="border:1px solid rgba(129,140,248,.4); background:rgba(129,140,248,.08); color:var(--accent);">sinh(Φ_L) · sinh(Φ_S) = K</span>
-    <span class="pill" style="border:1px solid rgba(251,191,36,.4); background:rgba(251,191,36,.08); color:var(--gold);">ρ = S / (L + δ)</span>
+    <span class="pill" style="border:1px solid rgba(251,191,36,.4); background:rgba(251,191,36,.08); color:var(--gold);">ρ = S / (L + |δ|) · w_out = w_in^ρ</span>
     <span class="pill" style="border:1px solid rgba(34,211,238,.4); background:rgba(34,211,238,.08); color:var(--cyan);">BTC ≡ (φ*, 1, 1)</span>
-    <span class="pill" style="border:1px solid rgba(244,114,182,.4); background:rgba(244,114,182,.08); color:var(--pink);">δ = q · w · sinh(φ − φ*)</span>
+    <span class="pill" style="border:1px solid rgba(244,114,182,.4); background:rgba(244,114,182,.08); color:var(--pink);">δ = q · log(w) · sinh(φ − φ*)</span>
   </div>
   Policy Markets — Working Paper 2026
 </footer>
 
 <script>
 // ---------- math ----------
-const sinh = Math.sinh, asinh = Math.asinh;
+const sinh = Math.sinh, asinh = Math.asinh, log = Math.log, exp = Math.exp;
 const fmt = (x, n = 4) => (isFinite(x) ? x.toFixed(n) : '—');
 function poolFromAngles(phiL, phiS) {
   const L = sinh(phiL), S = sinh(phiS);
   return { phiL, phiS, L, S, K: L * S };
 }
 function poolFromLS(L, S) { return { phiL: asinh(L), phiS: asinh(S), L, S, K: L * S }; }
-// Signed δ. φ > 0 ⇒ trader expects upward drift relative to consensus,
-// so they synthetically sell rallies → δ pushed into S (short-like).
-// φ < 0 ⇒ they buy dips → δ pushed into L (long-like).
+// δ = q · log(w) · sinh(φ − φ*).
+// w = 1 ⇒ no action (trivial policy = holding).
+// w > 1 ⇒ trend-following amplification of the trader's drift expectation.
+// w < 1 ⇒ contrarian, sign of δ flips relative to a w>1 commitment at the same φ.
+// Sign of δ encodes both sign(φ−φ*) AND sign(log w). Same direction in the pool
+// for (bullish, trend-follow) and (bearish, contrarian).
 function previewTrade(pool, phiTrader, wIn, q) {
-  const dphi = phiTrader;                  // signed
-  const delta = q * wIn * sinh(dphi);      // signed effective size, scaled by units
+  const dphi = phiTrader;
+  const lw = log(Math.max(wIn, 1e-9));
+  const delta = q * lw * sinh(dphi);
   const mag = Math.abs(delta);
-  const side = dphi >= 0 ? 'short' : 'long';
+  const tiltL = delta >= 0;                // δ > 0 → push into L
   let L1, S1, rho, cost;
-  if (side === 'long') {
+  if (tiltL) {
     L1 = pool.L + mag; S1 = pool.K / L1;
     rho = pool.S / L1; cost = (pool.S * mag) / L1;
   } else {
@@ -197,9 +202,13 @@ function previewTrade(pool, phiTrader, wIn, q) {
   }
   const newPool = poolFromLS(L1, S1);
   const priceBefore = pool.S / pool.L, priceAfter = newPool.S / newPool.L;
+  // Counter-policy in log space: log(w_out) = ρ · log(w_in) ⇒ w_out = w_in^ρ.
+  // Net deviation from neutral preserved: w_net = w_in^(1-ρ).
+  const wOut = Math.pow(wIn, rho);
+  const wNet = Math.pow(wIn, 1 - rho);
   return {
-    dphi, delta, mag, side,
-    rho, wOut: wIn * rho, wNet: wIn * (1 - rho),
+    dphi, delta, mag, tiltL,
+    rho, wOut, wNet,
     cost, newPool, priceBefore, priceAfter,
     slippage: priceBefore > 0 ? Math.abs(priceAfter - priceBefore) / priceBefore : 0,
   };
@@ -259,29 +268,33 @@ function renderExplainer() {
   const y1 = cy - slope * (x1 - cx);
   const y2 = cy - slope * (x2 - cx);
 
-  // Action intensity = saturate(w * |deviation| / refDev). Higher w → ramp saturates closer to the line.
-  // q scales overall opacity (more units committed = louder presence).
-  const refDev = 90;                        // pixels of deviation that fully saturates at w=1
+  // Action intensity ∝ |log w| · |deviation|. At w=1, intensity is zero everywhere (no action).
+  // w > 1: normal mean-reverting policy. SELL above drift (red), BUY below (green).
+  // w < 1: contrarian regime. Colors flip — BUY above (green), SELL below (red).
+  // q scales overall opacity.
+  const lw = Math.log(Math.max(w, 1e-9));
+  const intensityScale = Math.abs(lw);
+  const flipped = lw < 0;
+  const upperColor = flipped ? '#22c55e' : '#ef4444';
+  const lowerColor = flipped ? '#ef4444' : '#22c55e';
+  const refDev = 90;
   const maxOpacity = Math.min(0.9, 0.18 + q * 0.16);
-  const samples = 28;                       // vertical samples per side for the gradient
-  const stripWidth = (x2 - x1);
+  const samples = 28;
 
   for (let i = 0; i < samples; i++) {
     const t0 = i / samples, t1 = (i + 1) / samples;
-    // sell side (above the drift line)
-    const devTop = (cy + 8) * t1;           // pixel deviation at outer edge
+    const devTop = (cy + 8) * t1;
     const devBot = (cy + 8) * t0;
     const devMid = (devTop + devBot) / 2;
-    const action = Math.min(1, w * devMid / refDev);
+    const action = Math.min(1, intensityScale * devMid / refDev);
     const op = action * maxOpacity;
-    // upper strip: y from (drift - devTop) to (drift - devBot)
     svg.appendChild(el('path', {
       d: `M${x1},${y1-devTop} L${x2},${y2-devTop} L${x2},${y2-devBot} L${x1},${y1-devBot} Z`,
-      fill:'#ef4444', 'fill-opacity':op, stroke:'none'
+      fill:upperColor, 'fill-opacity':op, stroke:'none'
     }));
     svg.appendChild(el('path', {
       d: `M${x1},${y1+devBot} L${x2},${y2+devBot} L${x2},${y2+devTop} L${x1},${y1+devTop} Z`,
-      fill:'#22c55e', 'fill-opacity':op, stroke:'none'
+      fill:lowerColor, 'fill-opacity':op, stroke:'none'
     }));
   }
 
@@ -303,7 +316,7 @@ function renderExplainer() {
     const above = p.py < driftY;                         // SVG y is inverted
     svg.appendChild(el('circle', {
       cx: p.px, cy: p.py, r: 1.8,
-      fill: above ? '#ef4444' : '#22c55e'
+      fill: above ? upperColor : lowerColor
     }));
   }
 
@@ -315,9 +328,15 @@ function renderExplainer() {
     const t = (i + 0.5) / n;
     svg.appendChild(el('circle', { cx: x1 + t*(x2-x1), cy: y1 + t*(y2-y1), r:3, fill:'#fbbf24' }));
   }
-  svg.appendChild(el('text', { x:W-8, y:14, fill:'#555770', 'font-size':10, 'text-anchor':'end' }, 'SELL · price above φ'));
-  svg.appendChild(el('text', { x:W-8, y:H-6, fill:'#555770', 'font-size':10, 'text-anchor':'end' }, 'BUY · price below φ'));
+  const upperLabel = flipped ? 'BUY (contrarian) · price above φ' : 'SELL · price above φ';
+  const lowerLabel = flipped ? 'SELL (contrarian) · price below φ' : 'BUY · price below φ';
+  svg.appendChild(el('text', { x:W-8, y:14, fill:'#555770', 'font-size':10, 'text-anchor':'end' }, upperLabel));
+  svg.appendChild(el('text', { x:W-8, y:H-6, fill:'#555770', 'font-size':10, 'text-anchor':'end' }, lowerLabel));
+  const regime = w === 1 ? 'w=1 · holding (no action)'
+              : w > 1   ? 'w>1 · trend-following'
+              :            'w<1 · contrarian';
   svg.appendChild(el('text', { x:8, y:14, fill:'#e4e6ee', 'font-size':10 }, 'BTC (synthetic 1y)'));
+  svg.appendChild(el('text', { x:8, y:H-6, fill:'#fbbf24', 'font-size':10 }, regime));
 }
 
 // ---------- Section 2: pool + trade ----------
@@ -383,10 +402,12 @@ function renderTrade(preview) {
   document.getElementById('t-w-v').textContent = state.wIn.toFixed(2);
   document.getElementById('t-q-v').textContent = state.q.toFixed(2);
 
-  const tilt = preview.dphi >= 0 ? 'above φ*' : 'below φ*';
+  const tilt = preview.delta === 0 ? '— neutral —'
+             : preview.tiltL ? 'pushes into L' : 'pushes into S';
+  const tiltColor = preview.delta === 0 ? '#555770' : '#818cf8';
   document.getElementById('trade-readouts').innerHTML =
     rowHTML('φ  expected drift', fmt(preview.dphi)) +
-    rowHTML('consensus tilt', tilt, '#818cf8') +
+    rowHTML('pool tilt', tilt, tiltColor) +
     rowHTML('δ  effective size', fmt(preview.delta), '#f472b6') +
     rowHTML('ρ  sensitivity ratio', fmt(preview.rho), '#fbbf24') +
     rowHTML('w_out  received', fmt(preview.wOut)) +
