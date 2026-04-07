@@ -105,7 +105,6 @@
   <div class="lede">
     A market where the traded instrument is a <span class="text-accent">policy</span> — a committed rebalancing program (φ, w, q).
     The AMM prices policies via a <span class="text-gold">sinh-product invariant</span>.
-    The sensitivity ratio ρ is the permanent execution quality locked into every future rebalance.
   </div>
 </header>
 
@@ -169,19 +168,25 @@
 
 <!-- SECTION 1 -->
 <section class="panel">
-  <h2>What is a Policy?</h2>
+  <h2>Commit a Policy</h2>
   <div class="small" style="margin-bottom:14px; color:var(--text); font-size:12px; line-height:1.6;">
     A policy is a committed rebalancing program: <span class="text-accent">(φ, w, q)</span> — drift angle, sensitivity, size.
-    BTC itself is the trivial policy <span class="text-gold">(φ*, 1, 1)</span>: consensus drift, unit sensitivity, unit size.
+    BTC itself is the trivial policy <span class="text-gold">(φ*, 1, 1)</span>. Move the sliders to commit against the pool
+    — the chart shows the backtest, the readouts show execution, and the pool state below updates live.
   </div>
   <div class="grid-explainer">
     <div>
-      <div class="slider"><div class="top"><span class="lab">φ  drift angle</span><span class="val text-accent" id="ex-phi-v">0.30</span></div>
-        <input type="range" id="ex-phi" min="-2" max="2" step="0.01" value="0.3"></div>
-      <div class="slider"><div class="top"><span class="lab">w  sensitivity</span><span class="val text-gold" id="ex-w-v">1.50</span></div>
-        <input type="range" id="ex-w" min="0.1" max="3" step="0.01" value="1.5"></div>
-      <div class="slider"><div class="top"><span class="lab">q  size (units)</span><span class="val text-cyan" id="ex-q-v">2.00</span></div>
-        <input type="range" id="ex-q" min="0.1" max="5" step="0.01" value="2"></div>
+      <div class="slider"><div class="top"><span class="lab">φ  drift angle</span><span class="val text-accent" id="t-phi-v">0.60</span></div>
+        <input type="range" id="t-phi" min="-2" max="2" step="0.01" value="0.6"></div>
+      <div class="slider"><div class="top"><span class="lab">w  sensitivity (1 = hold)</span><span class="val text-gold" id="t-w-v">1.00</span></div>
+        <input type="range" id="t-w" min="0.1" max="5" step="0.01" value="1"></div>
+      <div class="slider"><div class="top"><span class="lab">q  size (units)</span><span class="val text-cyan" id="t-q-v">1.00</span></div>
+        <input type="range" id="t-q" min="0.1" max="5" step="0.01" value="1"></div>
+      <div id="trade-readouts" style="margin:14px 0;"></div>
+      <div class="actions">
+        <button id="exec-btn" class="btn-exec">Commit Policy</button>
+        <button id="reset-btn" class="btn-reset">Reset</button>
+      </div>
     </div>
     <div>
       <svg id="ex-svg" viewBox="0 0 560 220"></svg>
@@ -193,39 +198,19 @@
       </div>
     </div>
   </div>
+  <div style="margin-top:18px;">
+    <div class="section-label">Transaction log</div>
+    <div class="log">
+      <table>
+        <thead><tr><th>#</th><th>φ</th><th>w</th><th>q</th><th>δ</th><th>ρ</th><th>deposit</th></tr></thead>
+        <tbody id="log-body"><tr><td colspan="7" class="empty">no trades yet</td></tr></tbody>
+      </table>
+    </div>
+  </div>
 </section>
 
 <!-- SECTION 2 -->
-<section class="grid2">
-  <div class="panel" style="margin-bottom:0;">
-    <h2>Trade  ·  Commit a Policy</h2>
-    <div class="small" style="margin-bottom:12px;">
-      A policy is a committed rule, not a directional bet. <span class="text-accent">φ</span> is your expected drift;
-      whether you end up buying or selling depends on the realized path vs. φ. The sign of φ relative to consensus
-      <span class="text-gold">φ*</span> only determines which way your commitment tilts the pool.
-    </div>
-    <div class="slider"><div class="top"><span class="lab">φ  drift angle</span><span class="val text-accent" id="t-phi-v">0.60</span></div>
-      <input type="range" id="t-phi" min="-2" max="2" step="0.01" value="0.6"></div>
-    <div class="slider"><div class="top"><span class="lab">w_in  sensitivity (1 = hold)</span><span class="val text-gold" id="t-w-v">1.00</span></div>
-      <input type="range" id="t-w" min="0.1" max="5" step="0.01" value="1"></div>
-    <div class="slider"><div class="top"><span class="lab">q  units</span><span class="val text-cyan" id="t-q-v">1.00</span></div>
-      <input type="range" id="t-q" min="0.1" max="5" step="0.01" value="1"></div>
-    <div id="trade-readouts" style="margin:14px 0;"></div>
-    <div class="actions">
-      <button id="exec-btn" class="btn-exec">Commit Policy</button>
-      <button id="reset-btn" class="btn-reset">Reset</button>
-    </div>
-    <div style="margin-top:16px;">
-      <div class="section-label">Transaction log</div>
-      <div class="log">
-        <table>
-          <thead><tr><th>#</th><th>φ</th><th>w_in</th><th>q</th><th>δ</th><th>ρ</th><th>cost</th></tr></thead>
-          <tbody id="log-body"><tr><td colspan="7" class="empty">no trades yet</td></tr></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-  <div class="panel" style="margin-bottom:0;">
+<section class="panel">
     <h2>Pool State  ·  L · S = K</h2>
     <svg id="pool-svg" viewBox="0 0 420 320"></svg>
     <div id="pool-readouts" style="margin-top:12px;"></div>
@@ -243,7 +228,6 @@
         Liquidity "stays centered around consensus" <span data-tip="Consensus is defined as the midpoint of L and S in angle-space, so moving L or S mechanically moves consensus. The exponential depth shape around consensus falls out of the sinh invariant — it's not imposed, it's a consequence.">by construction</span>:
         consensus is the midpoint of the distribution, not a fixed price.</p>
     </div>
-  </div>
 </section>
 
 <footer>
@@ -309,7 +293,6 @@ const state = {
   pool: INITIAL(),
   phi: 0.6, wIn: 1.0, q: 1.0,
   log: [],
-  ex: { phi: 0.3, w: 1.5, q: 2.0 },
 };
 
 // ---------- helpers ----------
@@ -349,10 +332,7 @@ const PRICE_PATH = (() => {
 
 // ---------- Section 1: explainer ----------
 function renderExplainer() {
-  const { phi, w, q } = state.ex;
-  document.getElementById('ex-phi-v').textContent = phi.toFixed(2);
-  document.getElementById('ex-w-v').textContent = w.toFixed(2);
-  document.getElementById('ex-q-v').textContent = q.toFixed(2);
+  const phi = state.phi, w = state.wIn, q = state.q;
   const svg = document.getElementById('ex-svg');
   clear(svg);
   const W = 560, H = 220, cy = H/2;
@@ -563,13 +543,6 @@ function render() {
 }
 
 // ---------- bindings ----------
-function bindRange(id, key) {
-  document.getElementById(id).addEventListener('input', (e) => {
-    state.ex[key] = parseFloat(e.target.value); render();
-  });
-}
-bindRange('ex-phi', 'phi'); bindRange('ex-w', 'w'); bindRange('ex-q', 'q');
-
 document.getElementById('t-phi').addEventListener('input', e => { state.phi = parseFloat(e.target.value); render(); });
 document.getElementById('t-w').addEventListener('input', e => { state.wIn = parseFloat(e.target.value); render(); });
 document.getElementById('t-q').addEventListener('input', e => { state.q = parseFloat(e.target.value); render(); });
