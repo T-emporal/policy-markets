@@ -311,7 +311,7 @@ function previewTrade(pool, phiTrader, wIn, q) {
     dphi, delta, mag, tiltL,
     rho, wOut, wNet,
     cost, newPool, priceBefore, priceAfter,
-    slippage: priceBefore > 0 ? Math.abs(priceAfter - priceBefore) / priceBefore : 0,
+    slippage: 1 - rho,        // fraction of notional value lost to impact
   };
 }
 
@@ -539,7 +539,7 @@ function renderTrade(preview) {
     rowHTML('w_out  received', fmt(preview.wOut), null, 'Counter-policy you receive: w_out = w_in^ρ. In log-space, ρ fraction of your sensitivity is preserved.') +
     rowHTML('w_net  net exposure', fmt(preview.wNet), null, 'w_in^(1−ρ). The residual "distance from neutral" after the AMM absorbs some.') +
     rowHTML('cost (BTC)', fmt(preview.cost), '#22d3ee', 'BTC paid to execute. Scales with |δ| and pool imbalance.') +
-    rowHTML('slippage', (preview.slippage * 100).toFixed(2) + '%', null, 'Fractional move in the marginal clearing price P = S/L caused by this commitment.') +
+    rowHTML('slippage  (1−ρ)', (preview.slippage * 100).toFixed(2) + '%', null, 'Fraction of committed notional value lost to price impact. Identically equal to 1 − ρ — there is no other notion of slippage here.') +
     rowHTML('price after', fmt(preview.priceAfter), '#fbbf24', 'The new marginal clearing price after the commitment is absorbed.');
 }
 
