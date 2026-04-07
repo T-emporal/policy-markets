@@ -385,11 +385,13 @@ function renderExplainer() {
   // "if I had committed this policy 1y ago expecting drift φ, here's what would have happened."
   const dy_right = start.py + slope * (today.px - start.px);
 
+  // w > 1 (trend-following): BUY above drift (green), SELL below (red).
+  // w < 1 (contrarian / mean-reverting): SELL above (red), BUY below (green).
   const lw = Math.log(Math.max(w, 1e-9));
   const intensityScale = Math.abs(lw);
   const flipped = lw < 0;
-  const upperColor = flipped ? '#22c55e' : '#ef4444';
-  const lowerColor = flipped ? '#ef4444' : '#22c55e';
+  const upperColor = flipped ? '#ef4444' : '#22c55e';
+  const lowerColor = flipped ? '#22c55e' : '#ef4444';
   const refDev = 90;
   const maxOpacity = Math.min(0.9, 0.18 + q * 0.16);
   const samples = 28;
@@ -451,8 +453,8 @@ function renderExplainer() {
       fill: above ? upperColor : lowerColor, 'fill-opacity': 0.75
     }));
   }
-  const upperLabel = flipped ? 'BUY (contrarian) · price above φ' : 'SELL · price above φ';
-  const lowerLabel = flipped ? 'SELL (contrarian) · price below φ' : 'BUY · price below φ';
+  const upperLabel = flipped ? 'SELL (contrarian) · price above φ' : 'BUY (trend) · price above φ';
+  const lowerLabel = flipped ? 'BUY (contrarian) · price below φ' : 'SELL (trend) · price below φ';
   svg.appendChild(el('text', { x:W-8, y:14, fill:'#555770', 'font-size':10, 'text-anchor':'end' }, upperLabel));
   svg.appendChild(el('text', { x:W-8, y:H-6, fill:'#555770', 'font-size':10, 'text-anchor':'end' }, lowerLabel));
   const regime = w === 1 ? 'w=1 · holding (no action)'
