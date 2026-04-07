@@ -67,6 +67,27 @@
   .section-label { font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }
   ::-webkit-scrollbar { width:8px; height:8px; }
   ::-webkit-scrollbar-thumb { background:#1c1d30; border-radius:4px; }
+  details.defs { margin: 8px 0 24px; border:1px solid var(--border); border-radius:6px;
+    background:var(--panel); padding: 0; }
+  details.defs > summary { cursor:pointer; padding:12px 16px; color:var(--bright);
+    font-size:12px; text-transform:uppercase; letter-spacing:1.5px; font-weight:700;
+    list-style:none; }
+  details.defs > summary::-webkit-details-marker { display:none; }
+  details.defs > summary::before { content:'▸ '; color:var(--accent); }
+  details.defs[open] > summary::before { content:'▾ '; }
+  details.defs .body { padding: 4px 16px 16px; border-top:1px dashed var(--border); }
+  details.defs dl { margin: 0; display:grid; grid-template-columns: 140px 1fr; gap:6px 18px; }
+  details.defs dt { color:var(--bright); font-size:12px; padding-top:2px; }
+  details.defs dd { margin:0; color:var(--text); font-size:12px; line-height:1.55; }
+  [data-tip] { border-bottom: 1px dotted var(--dim); cursor:help; position:relative; }
+  [data-tip]:hover::after { content: attr(data-tip); position:absolute; left:0; top:calc(100% + 6px);
+    background:#05050a; color:var(--bright); border:1px solid var(--border); padding:6px 10px;
+    border-radius:4px; font-size:11px; white-space:normal; width:max-content; max-width:320px;
+    z-index:100; line-height:1.5; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+  .narration { color:var(--text); font-size:12px; line-height:1.65; margin-top:14px;
+    padding-top:12px; border-top:1px dashed var(--border); }
+  .narration p { margin:6px 0; }
+  .narration .lead { color:var(--bright); }
 </style>
 </head>
 <body>
@@ -80,6 +101,55 @@
     The sensitivity ratio ρ is the permanent execution quality locked into every future rebalance.
   </div>
 </header>
+
+<details class="defs">
+  <summary>Definitions</summary>
+  <div class="body">
+    <dl>
+      <dt><span class="text-accent">policy (φ, w, q)</span></dt>
+      <dd>A committed rebalancing program. Not a directional bet — a rule. The trader commits to rebalance against deviations from their expected drift φ with reactivity w over q units of size.</dd>
+
+      <dt><span class="text-accent">φ  drift angle</span></dt>
+      <dd>Trader's expected drift. Magnitude is conviction; sign indicates which way relative to consensus φ*. Range: (−∞, ∞), bounded to [−2, 2] in UI.</dd>
+
+      <dt><span class="text-gold">w  sensitivity</span></dt>
+      <dd><span class="text-gold">w = 1</span> = trivial policy = just holding. <span class="text-gold">w &gt; 1</span> = trend-following (weight in asset moves more sharply than holding). <span class="text-gold">w &lt; 1</span> = contrarian (weight moves less, or opposite). Lives on a multiplicative scale: w=2 and w=½ are mirror-opposites in log space.</dd>
+
+      <dt><span class="text-cyan">q  size</span></dt>
+      <dd>Units committed. Linear amplitude of the policy's impact on the pool.</dd>
+
+      <dt><span class="text-gold">φ*  consensus</span></dt>
+      <dd>Weighted mean of all committed drift angles. The "market expectation" of drift. Simplified to 0 in this explorer.</dd>
+
+      <dt>L, S  reserves</dt>
+      <dd>Two sides of the pool, with L = sinh(Φ_L), S = sinh(Φ_S). The pool's net sensitivity is always 1 — the pool itself IS the asset (BTC).</dd>
+
+      <dt>K = L · S</dt>
+      <dd>Invariant of the sinh-product AMM. Trades preserve K.</dd>
+
+      <dt>δ  effective size</dt>
+      <dd><code>δ = q · log(w) · sinh(φ − φ*)</code>. Signed. Zero at w=1. Sign tells you which reserve absorbs the commitment: δ &gt; 0 pushes into L, δ &lt; 0 pushes into S.</dd>
+
+      <dt><span class="text-gold">ρ  sensitivity ratio</span></dt>
+      <dd>Dimensionless execution quality in (0, 1]. <span class="text-gold">ρ = (actual fill) / (market-clearing price)</span>. ρ = 1 means infinite liquidity (no impact); ρ → 0 means pool exhaustion. <b>Not a one-time fee</b> — it's the permanent quality locked into every future rebalance this policy makes.</dd>
+
+      <dt>w_out = w_in^ρ</dt>
+      <dd>The counter-policy the trader receives. In log-space, <code>log(w_out) = ρ · log(w_in)</code> — ρ is the fraction of log-sensitivity preserved. Fixed point at w=1.</dd>
+
+      <dt>w_net = w_in^(1−ρ)</dt>
+      <dd>Net deviation from neutral the trader actually ends up with, after the AMM absorbs some.</dd>
+
+      <dt>cost (BTC)</dt>
+      <dd>BTC paid to execute the commitment. Scales with δ and pool imbalance.</dd>
+
+      <dt>D(δ) depth</dt>
+      <dd>Liquidity density at effective size δ. Falls exponentially away from consensus: <code>D(δ) = e^(−α|δ|)</code>.</dd>
+
+      <dt>λ(δ) impact</dt>
+      <dd>Marginal price impact: <code>λ(δ) = α / D(δ) = α · e^(α|δ|)</code>. Rises exponentially as commitments move away from consensus.</dd>
+    </dl>
+  </div>
+</details>
 
 <!-- SECTION 1 -->
 <section class="panel">
@@ -149,15 +219,38 @@
 <section class="panel" style="margin-top:24px;">
   <h2>Depth Profile  ·  D(δ) = e^(−α|δ|)   ·   Impact λ(δ) = α / D(δ)</h2>
   <svg id="depth-svg" viewBox="0 0 900 220"></svg>
+  <div class="narration">
+    <p class="lead">Liquidity is concentrated at consensus and falls off exponentially on either side.</p>
+    <p>The filled region <span class="text-long">(bids, green)</span> and <span class="text-short">(asks, red)</span>
+      is the <span data-tip="How much effective size δ the pool can absorb at a given distance from consensus φ*. Integral = total displaceable capacity.">depth D(δ)</span>.
+      Commitments near consensus (small |δ|) sit in the fat part of the curve — the pool can absorb them cheaply.
+      Commitments far from consensus fall into the thin tails, where the same δ costs much more.</p>
+    <p>The dashed gold line is the <span data-tip="Marginal price impact per unit of δ. Because depth is exponential, impact grows exponentially too.">impact function λ(δ) = α/D(δ)</span>.
+      It's the reciprocal of depth: where liquidity is thin, impact is steep. The pink marker is your current commitment's position on this axis —
+      if it's in the shallow tail, your ρ will be bad and your cost will be high.</p>
+    <p>Intuition: the AMM "believes" in consensus. It rewards traders whose expected drift aligns with the crowd (small |Δφ|)
+      and penalizes traders with contrarian expectations, not by charging a fee, but by giving them worse execution.</p>
+  </div>
 </section>
 
 <!-- SECTION 3 -->
 <section class="panel">
-  <h2>Sensitivity Ratio Explorer  ·  ρ = S / (L + δ)</h2>
+  <h2>Sensitivity Ratio Explorer  ·  ρ = fill / clearing</h2>
   <svg id="rho-svg" viewBox="0 0 900 320"></svg>
-  <div style="margin-top:10px; color:var(--text); font-size:12px; line-height:1.6;">
-    <span class="text-gold">ρ is not a fee.</span> It is a permanent execution quality. Every future rebalance you make
-    against this commitment fills at this ratio. Deeper pools (higher K) and smaller drift gaps yield ρ closer to 1.
+  <div class="narration">
+    <p class="lead">ρ is the dimensionless ratio of what you actually got to what the market quoted — the fraction of ideal execution.</p>
+    <p>Formally, <span data-tip="Market-clearing price = marginal price before your trade (S/L). Actual fill = average execution price for your committed size δ. ρ is their ratio, always in (0, 1].">ρ = (average fill price) / (marginal clearing price)</span>.
+      ρ = 1 means you executed at exactly the quoted price — infinite liquidity, zero impact. ρ → 0 means the pool was thin enough that you
+      moved the price dramatically against yourself. It's a <b>pure number</b>, not a price and not a fee.</p>
+    <p>Each curve shows how ρ decays as your drift gap |Δφ| grows, for a pool of depth K. Bigger pools (lighter curves) decay more slowly —
+      same conviction, better fill. The highlighted curve is your current pool. The pink dot is your current commitment's (|Δφ|, ρ).</p>
+    <p class="lead">Why this matters: ρ is not a one-time cost. It's the <span class="text-gold">permanent execution quality</span> locked into
+      every future rebalance that fires under this policy. A w&gt;1 trend-follower with ρ=0.85 will, forever, translate 85% of log-sensitivity
+      into actual exposure changes when the market deviates from their expected drift. Commit a policy with ρ=0.4, and every future rebalance
+      leaks 60% of its intended action into the pool. Choose φ and q such that ρ stays high — or accept the erosion as the price of an
+      unusual conviction.</p>
+    <p>The counter-policy you receive is <code>w_out = w_in^ρ</code>. At ρ=1 you get your full sensitivity back;
+      at ρ=0 you get the trivial policy (w=1, just holding).</p>
   </div>
 </section>
 
@@ -195,10 +288,14 @@ function previewTrade(pool, phiTrader, wIn, q) {
   let L1, S1, rho, cost;
   if (tiltL) {
     L1 = pool.L + mag; S1 = pool.K / L1;
-    rho = pool.S / L1; cost = (pool.S * mag) / L1;
+    // ρ = avg fill price / marginal clearing price. At balanced pools this collapses to
+    // the classic √K/(√K+δ) curve from the spec, but is always dimensionless.
+    rho = pool.L / L1;
+    cost = (pool.S * mag) / L1;
   } else {
     S1 = pool.S + mag; L1 = pool.K / S1;
-    rho = pool.L / S1; cost = (pool.L * mag) / S1;
+    rho = pool.S / S1;
+    cost = (pool.L * mag) / S1;
   }
   const newPool = poolFromLS(L1, S1);
   const priceBefore = pool.S / pool.L, priceAfter = newPool.S / newPool.L;
@@ -362,8 +459,9 @@ function renderExplainer() {
 }
 
 // ---------- Section 2: pool + trade ----------
-function rowHTML(k, v, color) {
-  return `<div class="row"><span class="k">${k}</span><span class="v" ${color?`style="color:${color}"`:''}>${v}</span></div>`;
+function rowHTML(k, v, color, tip) {
+  const kHTML = tip ? `<span class="k" data-tip="${tip}">${k}</span>` : `<span class="k">${k}</span>`;
+  return `<div class="row">${kHTML}<span class="v" ${color?`style="color:${color}"`:''}>${v}</span></div>`;
 }
 
 function renderPool() {
@@ -408,13 +506,13 @@ function renderPool() {
   const tilt = (pool.L - pool.S) / (pool.L + pool.S);
   const P = pool.S / pool.L;
   document.getElementById('pool-readouts').innerHTML =
-    rowHTML('Φ_L', fmt(pool.phiL)) +
-    rowHTML('Φ_S', fmt(pool.phiS)) +
-    rowHTML('L = sinh(Φ_L)', fmt(pool.L)) +
-    rowHTML('S = sinh(Φ_S)', fmt(pool.S)) +
-    rowHTML('K = L · S', fmt(pool.K), '#818cf8') +
-    rowHTML('P = S / L', fmt(P), '#fbbf24') +
-    rowHTML('tilt', fmt(tilt));
+    rowHTML('Φ_L', fmt(pool.phiL), null, 'Angle parameter of the L reserve. L = sinh(Φ_L).') +
+    rowHTML('Φ_S', fmt(pool.phiS), null, 'Angle parameter of the S reserve. S = sinh(Φ_S).') +
+    rowHTML('L = sinh(Φ_L)', fmt(pool.L), null, 'Left reserve. Grows when commitments with δ > 0 enter.') +
+    rowHTML('S = sinh(Φ_S)', fmt(pool.S), null, 'Right reserve. Grows when commitments with δ < 0 enter.') +
+    rowHTML('K = L · S', fmt(pool.K), '#818cf8', 'The sinh-product invariant. Trades preserve K; liquidity events change it.') +
+    rowHTML('P = S / L', fmt(P), '#fbbf24', 'Marginal clearing price. The quote before any trade impact.') +
+    rowHTML('tilt', fmt(tilt), null, '(L−S)/(L+S). Measures how far the pool is from the balanced 50/50 state.');
 
   return preview;
 }
@@ -428,15 +526,15 @@ function renderTrade(preview) {
              : preview.tiltL ? 'pushes into L' : 'pushes into S';
   const tiltColor = preview.delta === 0 ? '#555770' : '#818cf8';
   document.getElementById('trade-readouts').innerHTML =
-    rowHTML('φ  expected drift', fmt(preview.dphi)) +
-    rowHTML('pool tilt', tilt, tiltColor) +
-    rowHTML('δ  effective size', fmt(preview.delta), '#f472b6') +
-    rowHTML('ρ  sensitivity ratio', fmt(preview.rho), '#fbbf24') +
-    rowHTML('w_out  received', fmt(preview.wOut)) +
-    rowHTML('w_net  net exposure', fmt(preview.wNet)) +
-    rowHTML('cost (BTC)', fmt(preview.cost), '#22d3ee') +
-    rowHTML('slippage', (preview.slippage * 100).toFixed(2) + '%') +
-    rowHTML('price after', fmt(preview.priceAfter), '#fbbf24');
+    rowHTML('φ  expected drift', fmt(preview.dphi), null, 'Your expected drift angle. Not a bet on direction — the anchor around which your rebalancing rule fires.') +
+    rowHTML('pool tilt', tilt, tiltColor, 'Which reserve your commitment pushes into. Determined by sign(δ) = sign(log w)·sign(φ−φ*).') +
+    rowHTML('δ  effective size', fmt(preview.delta), '#f472b6', 'δ = q · log(w) · sinh(φ − φ*). Signed effective commitment size. Zero at w=1.') +
+    rowHTML('ρ  sensitivity ratio', fmt(preview.rho), '#fbbf24', 'Dimensionless execution quality in (0,1]. ρ = avg fill / marginal clearing. Permanent quality locked into every future rebalance.') +
+    rowHTML('w_out  received', fmt(preview.wOut), null, 'Counter-policy you receive: w_out = w_in^ρ. In log-space, ρ fraction of your sensitivity is preserved.') +
+    rowHTML('w_net  net exposure', fmt(preview.wNet), null, 'w_in^(1−ρ). The residual "distance from neutral" after the AMM absorbs some.') +
+    rowHTML('cost (BTC)', fmt(preview.cost), '#22d3ee', 'BTC paid to execute. Scales with |δ| and pool imbalance.') +
+    rowHTML('slippage', (preview.slippage * 100).toFixed(2) + '%', null, 'Fractional move in the marginal clearing price P = S/L caused by this commitment.') +
+    rowHTML('price after', fmt(preview.priceAfter), '#fbbf24', 'The new marginal clearing price after the commitment is absorbed.');
 }
 
 function renderLog() {
