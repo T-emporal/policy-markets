@@ -265,13 +265,20 @@ function renderExplainer() {
   const W = 560, H = 220, cx = W/2, cy = H/2;
   const slope = Math.tan(phi * 0.6);
   const x1 = 20, x2 = W - 20;
-  const y1 = cy - slope * (x1 - cx);
-  const y2 = cy - slope * (x2 - cx);
 
-  // Action intensity ∝ |log w| · |deviation|. At w=1, intensity is zero everywhere (no action).
-  // w > 1: normal mean-reverting policy. SELL above drift (red), BUY below (green).
-  // w < 1: contrarian regime. Colors flip — BUY above (green), SELL below (red).
-  // q scales overall opacity.
+  // synthetic BTC path: only past (left half) is real history; right half is empty future.
+  const amp = 80;
+  const pastPts = PRICE_PATH.map(p => {
+    const px = x1 + p.t * (cx - x1);
+    const py = cy - p.y * amp;
+    return { px, py };
+  });
+  // "today" is the most recent price point
+  const today = pastPts[pastPts.length - 1];
+  // drift line pivots at (today) and projects forward into the future half
+  const dy_future = today.py - slope * (x2 - today.px);
+  const dy_past_left = today.py - slope * (x1 - today.px);   // hypothetical past extrapolation
+
   const lw = Math.log(Math.max(w, 1e-9));
   const intensityScale = Math.abs(lw);
   const flipped = lw < 0;
@@ -281,52 +288,66 @@ function renderExplainer() {
   const maxOpacity = Math.min(0.9, 0.18 + q * 0.16);
   const samples = 28;
 
+  // Gradient zones only on the FUTURE half (today → x2). Anchored to the projected drift line.
+  const fy_today = today.py, fy_future = dy_future;
   for (let i = 0; i < samples; i++) {
     const t0 = i / samples, t1 = (i + 1) / samples;
-    const devTop = (cy + 8) * t1;
-    const devBot = (cy + 8) * t0;
+    const devTop = (H * 0.55) * t1;
+    const devBot = (H * 0.55) * t0;
     const devMid = (devTop + devBot) / 2;
     const action = Math.min(1, intensityScale * devMid / refDev);
     const op = action * maxOpacity;
     svg.appendChild(el('path', {
-      d: `M${x1},${y1-devTop} L${x2},${y2-devTop} L${x2},${y2-devBot} L${x1},${y1-devBot} Z`,
+      d: `M${today.px},${fy_today-devTop} L${x2},${fy_future-devTop} L${x2},${fy_future-devBot} L${today.px},${fy_today-devBot} Z`,
       fill:upperColor, 'fill-opacity':op, stroke:'none'
     }));
     svg.appendChild(el('path', {
-      d: `M${x1},${y1+devBot} L${x2},${y2+devBot} L${x2},${y2+devTop} L${x1},${y1+devTop} Z`,
+      d: `M${today.px},${fy_today+devBot} L${x2},${fy_future+devBot} L${x2},${fy_future+devTop} L${today.px},${fy_today+devTop} Z`,
       fill:lowerColor, 'fill-opacity':op, stroke:'none'
     }));
   }
 
-  // synthetic BTC path overlay
-  const amp = 80;                                        // pixel amplitude of path around cy
-  const pathPts = PRICE_PATH.map(p => {
-    const px = x1 + p.t * (x2 - x1);
-    const py = cy - p.y * amp;
-    return { px, py };
-  });
+  // past price path
   svg.appendChild(el('polyline', {
-    points: pathPts.map(p => `${p.px},${p.py}`).join(' '),
-    fill:'none', stroke:'#e4e6ee', 'stroke-width':1.5, 'stroke-opacity':0.85
+    points: pastPts.map(p => `${p.px},${p.py}`).join(' '),
+    fill:'none', stroke:'#e4e6ee', 'stroke-width':1.5, 'stroke-opacity':0.9
   }));
-  // tick marks colored by which side of the drift line they sit on
-  for (let i = 0; i < pathPts.length; i += 6) {
-    const p = pathPts[i];
-    const driftY = y1 + ((p.px - x1) / (x2 - x1)) * (y2 - y1);
-    const above = p.py < driftY;                         // SVG y is inverted
-    svg.appendChild(el('circle', {
-      cx: p.px, cy: p.py, r: 1.8,
-      fill: above ? upperColor : lowerColor
-    }));
-  }
 
-  // drift line (drawn after path so it sits on top)
-  svg.appendChild(el('line', { x1, y1, x2, y2, stroke:'#fbbf24', 'stroke-width':2, 'stroke-dasharray':'4 3' }));
-  // q controls dot count along the drift line
+  // hypothetical past drift line (faded, dashed) — what the policy would have meant historically
+  svg.appendChild(el('line', {
+    x1, y1: dy_past_left, x2: today.px, y2: today.py,
+    stroke:'#fbbf24', 'stroke-width':1, 'stroke-dasharray':'2 4', 'stroke-opacity':0.35
+  }));
+  // forward drift line (solid, bright) — the actual commitment
+  svg.appendChild(el('line', {
+    x1: today.px, y1: today.py, x2, y2: dy_future,
+    stroke:'#fbbf24', 'stroke-width':2, 'stroke-dasharray':'4 3'
+  }));
+
+  // today vertical marker
+  svg.appendChild(el('line', { x1: cx, y1: 4, x2: cx, y2: H-18, stroke:'#818cf8', 'stroke-dasharray':'2 3', 'stroke-opacity':0.6 }));
+  svg.appendChild(el('text', { x: cx + 4, y: 14, fill:'#818cf8', 'font-size':10 }, 'today · t=0'));
+  svg.appendChild(el('circle', { cx: today.px, cy: today.py, r: 3, fill:'#fbbf24' }));
+
+  // q controls dot count along the FORWARD drift line
   const n = Math.max(1, Math.round(q * 2));
   for (let i = 0; i < n; i++) {
     const t = (i + 0.5) / n;
-    svg.appendChild(el('circle', { cx: x1 + t*(x2-x1), cy: y1 + t*(y2-y1), r:3, fill:'#fbbf24' }));
+    const dx = today.px + t * (x2 - today.px);
+    const dyy = today.py + t * (dy_future - today.py);
+    svg.appendChild(el('circle', { cx: dx, cy: dyy, r:3, fill:'#fbbf24' }));
+  }
+
+  // past tick marks: validation — where the policy would have bought/sold historically
+  for (let i = 0; i < pastPts.length; i += 6) {
+    const p = pastPts[i];
+    const tFrac = (p.px - x1) / (today.px - x1);
+    const driftYpast = dy_past_left + tFrac * (today.py - dy_past_left);
+    const above = p.py < driftYpast;
+    svg.appendChild(el('circle', {
+      cx: p.px, cy: p.py, r: 1.8,
+      fill: above ? upperColor : lowerColor, 'fill-opacity': 0.7
+    }));
   }
   const upperLabel = flipped ? 'BUY (contrarian) · price above φ' : 'SELL · price above φ';
   const lowerLabel = flipped ? 'SELL (contrarian) · price below φ' : 'BUY · price below φ';
@@ -335,7 +356,8 @@ function renderExplainer() {
   const regime = w === 1 ? 'w=1 · holding (no action)'
               : w > 1   ? 'w>1 · trend-following'
               :            'w<1 · contrarian';
-  svg.appendChild(el('text', { x:8, y:14, fill:'#e4e6ee', 'font-size':10 }, 'BTC (synthetic 1y)'));
+  svg.appendChild(el('text', { x:8, y:14, fill:'#e4e6ee', 'font-size':10 }, 'BTC · past 1y'));
+  svg.appendChild(el('text', { x:cx+4, y:H-22, fill:'#fbbf24', 'font-size':10 }, '↗ commitment forward'));
   svg.appendChild(el('text', { x:8, y:H-6, fill:'#fbbf24', 'font-size':10 }, regime));
 }
 
