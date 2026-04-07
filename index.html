@@ -126,19 +126,31 @@
       <dd>Units committed. Linear amplitude of the policy's impact on the pool.</dd>
 
       <dt><span class="text-gold">φ*  consensus</span></dt>
-      <dd>Weighted mean of all committed drift angles. The "market expectation" of drift. Simplified to 0 in this explorer.</dd>
+      <dd>Weighted mean of all committed drift angles — the current "midpoint" of the policy distribution. Not a fixed price; a moving reference frame that slides as commitments enter and exit. Simplified to 0 in this explorer.</dd>
 
-      <dt>L, S  reserves</dt>
-      <dd>Two sides of the pool, with L = sinh(Φ_L), S = sinh(Φ_S). The pool's net sensitivity is always 1 — the pool itself IS the asset (BTC).</dd>
+      <dt>Φ_L, Φ_S  angular half-widths</dt>
+      <dd>The two "wings" of the committed policy distribution, measured upward (Φ_L) and downward (Φ_S) in drift-angle from consensus φ*. When the pool is balanced, Φ_L = Φ_S and the distribution is symmetric around φ*.</dd>
+
+      <dt>L, S  wing weights</dt>
+      <dd><code>L = sinh(Φ_L)</code>, <code>S = sinh(Φ_S)</code>. Not pots of tokens — cumulative commitment weight on each side of consensus, in sinh-angle coordinates. L grows as commitments enter above φ*; S grows as commitments enter below. The pool's <i>net sensitivity</i> is always 1 — the pool itself IS the asset (BTC).</dd>
 
       <dt>K = L · S</dt>
-      <dd>Invariant of the sinh-product AMM. Trades preserve K.</dd>
+      <dd>Sinh-product invariant. Trades preserve K (slide along a hyperbola); liquidity events change K (jump between hyperbolas). Pool state is 2-dimensional: <code>(K, tilt)</code> or equivalently <code>(L, S)</code>.</dd>
+
+      <dt>tilt = (L−S)/(L+S)</dt>
+      <dd>Asymmetry of the distribution around consensus. 0 = balanced. Positive = more commitment mass above φ*; negative = more below. Moves along the hyperbola when trades execute.</dd>
+
+      <dt>P = S / L  marginal quote</dt>
+      <dd>The clearing price at the current pool state — what an infinitesimal next commitment would fill at. Moves when the pool tilts.</dd>
 
       <dt>δ  effective size</dt>
-      <dd><code>δ = q · log(w) · sinh(φ − φ*)</code>. Signed. Zero at w=1. Sign tells you which reserve absorbs the commitment: δ &gt; 0 pushes into L, δ &lt; 0 pushes into S.</dd>
+      <dd><code>δ = q · log(w) · sinh(φ − φ*)</code>. Signed. Zero at w=1. Sign tells you which wing absorbs the commitment: δ &gt; 0 pushes into L (pulls consensus upward), δ &lt; 0 pushes into S (pulls consensus downward).</dd>
 
       <dt><span class="text-gold">ρ  sensitivity ratio</span></dt>
       <dd>Dimensionless execution efficiency in (0, 1]. <span class="text-gold">ρ = (value actually received) / (value at the clearing quote)</span>. A frictionless pool would return your commitment's full notional at the marginal price; the AMM returns ρ of it. ρ = 1 ⇔ no impact (infinite depth or infinitesimal trade). ρ → 0 ⇔ the pool was thin and most of your notional got eaten by moving the price against yourself. <b>Not a one-time fee</b> — it's the permanent efficiency locked into every future rebalance this policy makes.</dd>
+
+      <dt>slippage = 1 − ρ</dt>
+      <dd>Fraction of committed notional value lost to price impact. Identically equal to 1 − ρ — there is no independent notion of slippage here.</dd>
 
       <dt>w_out = w_in^ρ</dt>
       <dd>The counter-policy the trader receives. In log-space, <code>log(w_out) = ρ · log(w_in)</code> — ρ is the fraction of log-sensitivity preserved. Fixed point at w=1.</dd>
@@ -146,14 +158,11 @@
       <dt>w_net = w_in^(1−ρ)</dt>
       <dd>Net deviation from neutral the trader actually ends up with, after the AMM absorbs some.</dd>
 
-      <dt>cost (BTC)</dt>
-      <dd>BTC paid to execute the commitment. Scales with δ and pool imbalance.</dd>
+      <dt>deposit (BTC)</dt>
+      <dd>BTC numeraire extracted from the opposite wing when the pool absorbs your commitment. <code>deposit = S·|δ|/(L+|δ|)</code> for L-side commits, or <code>L·|δ|/(S+|δ|)</code> for S-side. Scales with |δ| and pool imbalance.</dd>
 
-      <dt>D(δ) depth</dt>
-      <dd>Liquidity density at effective size δ. Falls exponentially away from consensus: <code>D(δ) = e^(−α|δ|)</code>.</dd>
-
-      <dt>λ(δ) impact</dt>
-      <dd>Marginal price impact: <code>λ(δ) = α / D(δ) = α · e^(α|δ|)</code>. Rises exponentially as commitments move away from consensus.</dd>
+      <dt>state manifold</dt>
+      <dd>The pool state lives on a 2D surface (L, S) ∈ ℝ²₊. Trades walk along constant-K hyperbolas (1 DoF); liquidity events move between hyperbolas (the 2nd DoF). Equivalent coordinate charts: (L,S), (Φ_L, Φ_S), (K, tilt), or (φ*, K).</dd>
     </dl>
   </div>
 </details>
@@ -192,6 +201,20 @@
     <h2>Pool State  ·  L · S = K</h2>
     <svg id="pool-svg" viewBox="0 0 420 320"></svg>
     <div id="pool-readouts" style="margin-top:12px;"></div>
+    <div class="narration">
+      <p class="lead">The pool state is the distribution of all committed policies, summarized in two numbers.</p>
+      <p><b>L</b> and <b>S</b> are the <i>wing weights</i> — cumulative commitment mass on each side of consensus φ*,
+        in sinh-angle coordinates. L counts policies committed above φ*; S counts policies committed below.
+        They're not reserves of tokens; they're bookkeeping for how the committed population is distributed around the mean.</p>
+      <p>The curve <code>L·S = K</code> is the set of all states with the same <b>depth</b>. A trade
+        (the pink preview) slides you along this hyperbola — shifting the balance between L and S, which
+        tilts consensus toward whichever side absorbed the commitment. A liquidity event (not shown) would jump
+        the entire curve inward or outward to a different K.</p>
+      <p>So the full state manifold is 2-dimensional: <code>(K, tilt)</code>, or equivalently <code>(L, S)</code>.
+        Trades exercise the tilt axis; liquidity exercises the depth axis.
+        Liquidity "stays centered around consensus" <span data-tip="Consensus is defined as the midpoint of L and S in angle-space, so moving L or S mechanically moves consensus. The exponential depth shape around consensus falls out of the sinh invariant — it's not imposed, it's a consequence.">by construction</span>:
+        consensus is the midpoint of the distribution, not a fixed price.</p>
+    </div>
   </div>
   <div class="panel" style="margin-bottom:0;">
     <h2>Trade  ·  Commit a Policy</h2>
@@ -220,23 +243,6 @@
         </table>
       </div>
     </div>
-  </div>
-</section>
-
-<section class="panel" style="margin-top:24px;">
-  <h2>Depth Profile  ·  D(δ) = e^(−α|δ|)   ·   Impact λ(δ) = α / D(δ)</h2>
-  <svg id="depth-svg" viewBox="0 0 900 220"></svg>
-  <div class="narration">
-    <p class="lead">Liquidity is concentrated at consensus and falls off exponentially on either side.</p>
-    <p>The filled region <span class="text-long">(bids, green)</span> and <span class="text-short">(asks, red)</span>
-      is the <span data-tip="How much effective size δ the pool can absorb at a given distance from consensus φ*. Integral = total displaceable capacity.">depth D(δ)</span>.
-      Commitments near consensus (small |δ|) sit in the fat part of the curve — the pool can absorb them cheaply.
-      Commitments far from consensus fall into the thin tails, where the same δ costs much more.</p>
-    <p>The dashed gold line is the <span data-tip="Marginal price impact per unit of δ. Because depth is exponential, impact grows exponentially too.">impact function λ(δ) = α/D(δ)</span>.
-      It's the reciprocal of depth: where liquidity is thin, impact is steep. The pink marker is your current commitment's position on this axis —
-      if it's in the shallow tail, your ρ will be bad and your cost will be high.</p>
-    <p>Intuition: the AMM "believes" in consensus. It rewards traders whose expected drift aligns with the crowd (small |Δφ|)
-      and penalizes traders with contrarian expectations, not by charging a fee, but by giving them worse execution.</p>
   </div>
 </section>
 
@@ -464,8 +470,9 @@ function renderPool() {
 
   svg.appendChild(el('line', { x1:pad, y1:H-pad, x2:W-4, y2:H-pad, stroke:'#1c1d30' }));
   svg.appendChild(el('line', { x1:pad, y1:4, x2:pad, y2:H-pad, stroke:'#1c1d30' }));
-  svg.appendChild(el('text', { x:W-6, y:H-pad-6, fill:'#555770', 'font-size':10, 'text-anchor':'end' }, 'L'));
-  svg.appendChild(el('text', { x:pad+6, y:12, fill:'#555770', 'font-size':10 }, 'S'));
+  svg.appendChild(el('text', { x:W-6, y:H-pad-6, fill:'#555770', 'font-size':10, 'text-anchor':'end' }, 'L  (above φ*)'));
+  svg.appendChild(el('text', { x:pad+6, y:12, fill:'#555770', 'font-size':10 }, 'S  (below φ*)'));
+  svg.appendChild(el('text', { x:W-6, y:20, fill:'#818cf8', 'font-size':9, 'text-anchor':'end' }, 'L·S = K  (trades slide along this hyperbola)'));
 
   const N = 80, lMin = pool.K / maxAxis, pts = [];
   for (let i = 0; i <= N; i++) {
@@ -494,13 +501,13 @@ function renderPool() {
   const tilt = (pool.L - pool.S) / (pool.L + pool.S);
   const P = pool.S / pool.L;
   document.getElementById('pool-readouts').innerHTML =
-    rowHTML('Φ_L', fmt(pool.phiL), null, 'Angle parameter of the L reserve. L = sinh(Φ_L).') +
-    rowHTML('Φ_S', fmt(pool.phiS), null, 'Angle parameter of the S reserve. S = sinh(Φ_S).') +
-    rowHTML('L = sinh(Φ_L)', fmt(pool.L), null, 'Left reserve. Grows when commitments with δ > 0 enter.') +
-    rowHTML('S = sinh(Φ_S)', fmt(pool.S), null, 'Right reserve. Grows when commitments with δ < 0 enter.') +
-    rowHTML('K = L · S', fmt(pool.K), '#818cf8', 'The sinh-product invariant. Trades preserve K; liquidity events change it.') +
-    rowHTML('P = S / L', fmt(P), '#fbbf24', 'Marginal clearing price. The quote before any trade impact.') +
-    rowHTML('tilt', fmt(tilt), null, '(L−S)/(L+S). Measures how far the pool is from the balanced 50/50 state.');
+    rowHTML('Φ_L  upper half-width', fmt(pool.phiL), null, 'Angular extent of the committed policy distribution above consensus φ*. Grows as commitments enter above φ*.') +
+    rowHTML('Φ_S  lower half-width', fmt(pool.phiS), null, 'Angular extent of the committed distribution below consensus φ*. Grows as commitments enter below φ*.') +
+    rowHTML('L = sinh(Φ_L)', fmt(pool.L), null, 'Upper wing weight. Cumulative commitment weight above consensus, in sinh-angle coordinates. Not a pot of tokens — a bookkeeping variable for distribution asymmetry.') +
+    rowHTML('S = sinh(Φ_S)', fmt(pool.S), null, 'Lower wing weight. Cumulative commitment weight below consensus, in sinh-angle coordinates.') +
+    rowHTML('K = L · S', fmt(pool.K), '#818cf8', 'Sinh-product invariant = pool depth. Trades preserve K (slide along a hyperbola). Liquidity events change K (jump to a new hyperbola).') +
+    rowHTML('P = S / L', fmt(P), '#fbbf24', 'Marginal clearing price. What an infinitesimal next commitment would fill at.') +
+    rowHTML('tilt', fmt(tilt), null, '(L−S)/(L+S). Asymmetry of the distribution around consensus. 0 = balanced; + = more mass above φ*; − = more below. Trades slide along the hyperbola by changing tilt while preserving K.');
 
   return preview;
 }
@@ -547,49 +554,11 @@ function renderLog() {
     </tr>`).join('');
 }
 
-// ---------- Section: depth ----------
-function renderDepth(preview) {
-  const svg = document.getElementById('depth-svg');
-  clear(svg);
-  const W = 900, H = 220, pad = 36, cy = H - pad;
-  const dMin = -5, dMax = 5, alpha = 0.6;
-  const sx = (d) => pad + ((d - dMin) / (dMax - dMin)) * (W - pad - 10);
-  const N = 120, depthPts = [], impactPts = [];
-  for (let i = 0; i <= N; i++) {
-    const d = dMin + (i / N) * (dMax - dMin);
-    const D = Math.exp(-alpha * Math.abs(d));
-    const lam = Math.min(alpha / D, 8);
-    depthPts.push([sx(d), cy - D * (H - pad - 10)]);
-    impactPts.push([sx(d), cy - (lam / 8) * (H - pad - 10)]);
-  }
-  svg.appendChild(el('line', { x1:pad, y1:cy, x2:W-4, y2:cy, stroke:'#1c1d30' }));
-  svg.appendChild(el('line', { x1:sx(0), y1:4, x2:sx(0), y2:cy, stroke:'#555770', 'stroke-dasharray':'2 3' }));
-  svg.appendChild(el('text', { x:sx(0)+4, y:14, fill:'#555770', 'font-size':10 }, 'consensus φ*'));
-
-  const bidPts = depthPts.filter(p => p[0] <= sx(0));
-  const askPts = depthPts.filter(p => p[0] >= sx(0));
-  const bidD = `M${sx(dMin)},${cy} ` + bidPts.map(p => `L${p[0]},${p[1]}`).join(' ') + ` L${sx(0)},${cy} Z`;
-  const askD = `M${sx(0)},${cy} ` + askPts.map(p => `L${p[0]},${p[1]}`).join(' ') + ` L${sx(dMax)},${cy} Z`;
-  svg.appendChild(el('path', { d:bidD, fill:'#22c55e', 'fill-opacity':0.35, stroke:'#22c55e' }));
-  svg.appendChild(el('path', { d:askD, fill:'#ef4444', 'fill-opacity':0.35, stroke:'#ef4444' }));
-  svg.appendChild(el('path', { d:'M' + impactPts.map(p => `${p[0]},${p[1]}`).join(' L'),
-    fill:'none', stroke:'#fbbf24', 'stroke-width':1.5, 'stroke-dasharray':'3 2' }));
-
-  const cd = preview.delta;
-  const cdC = Math.max(dMin, Math.min(dMax, cd));
-  svg.appendChild(el('line', { x1:sx(cdC), y1:4, x2:sx(cdC), y2:cy, stroke:'#f472b6', 'stroke-width':1.5 }));
-  svg.appendChild(el('text', { x:sx(cdC)+4, y:cy-6, fill:'#f472b6', 'font-size':10 }, `δ = ${cd.toFixed(2)}`));
-  svg.appendChild(el('text', { x:pad, y:H-8, fill:'#22c55e', 'font-size':10 }, 'BIDS'));
-  svg.appendChild(el('text', { x:W-12, y:H-8, fill:'#ef4444', 'font-size':10, 'text-anchor':'end' }, 'ASKS'));
-  svg.appendChild(el('text', { x:W-12, y:20, fill:'#fbbf24', 'font-size':10, 'text-anchor':'end' }, '— λ(δ) impact'));
-}
-
 // ---------- main render ----------
 function render() {
   renderExplainer();
   const preview = renderPool();
   renderTrade(preview);
-  renderDepth(preview);
   renderLog();
 }
 
